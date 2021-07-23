@@ -1,3 +1,7 @@
+# datasetlocation
+/Data/voc
+/Data/coco
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
