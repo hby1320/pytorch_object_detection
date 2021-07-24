@@ -12,37 +12,21 @@ import xml.etree.ElementTree as ET ## voc GT XML
 import collections
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import yaml
 import os
 
 ## ->FIX 복수의 데이터세트에서 사용가능하게 수정하기  voc폴더에 한번에 불러 올수 있도록 수정 XML 데이터 불러오기 ## YAML 사용해서 파일로 정리
-## -> coco 데이터세트도 동일하게 만들기 
+## -> coco 데이터세트도 동일하게 만들기
 ##
+with open('../Data/voc.yaml') as file:
+    voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
 path2data = '../Data/voc'
 if not os.path.exists(path2data):
     os.mkdir(path2data)
 
-voc_class = ["aeroplane",
-             "bicycle",
-             "bird",
-             "boat",
-             "bottle",
-             "bus",
-             "car",
-             "cat",
-             "chair",
-             "cow",
-             "diningtable",
-             "dog",
-             "horse",
-             "motorbike",
-             "person",
-             "pottedplant",
-             "sheep",
-             "sofa",
-             "train",
-             "tvmonitor"
-             ]
+
+voc_class = voc_data['class']
 
 class dataload_voc(VOCDetection):
     def __getitem__(self, index):
