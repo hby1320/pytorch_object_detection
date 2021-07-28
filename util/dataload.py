@@ -21,14 +21,21 @@ import os
 with open('../Data/voc.yaml') as file:
     voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
-path2data = '../Data/voc'
-if not os.path.exists(path2data):
-    os.mkdir(path2data)
-
+# path2data = '../Data/voc'
+# if not os.path.exists(path2data):
+#     os.mkdir(path2data)
+#
 
 voc_class = voc_data['class']
 
 class dataload_voc(VOCDetection):
+
+    # def __init__(self, cfg_yaml, root: str):
+    #     super().__init__(root)
+    #
+    #     with open(cfg_yaml) as file:
+    #         voc_data = yaml.load(file, Loader = yaml.FullLoad)
+
     def __getitem__(self, index):
         img = np.array(Image.open(self.images[index]).convert('RGB'))
         target = self.parse_voc_xml(ET.parse(self.annotations[index]).getroot())  # xml파일 분석하여 dict으로 받아오기
@@ -67,21 +74,21 @@ class dataload_voc(VOCDetection):
                 voc_dict[node.tag] = text
         return voc_dict
 
-def show(img, targets, labels, classes = voc_class):
+def data_set_show(img, targets, labels, classes = voc_class):
     img = to_pil_image(img)
     draw = ImageDraw.Draw(img)
     targets = np.array(targets)
     W, H = img.size
+    colors = np.random.randint(0, 255, size = (80, 3), dtype = 'uint8')  # 바운딩 박스 색상
 
     for tg, label in zip(targets, labels):
         id_ = int(label)  # class
         bbox = tg[:4]  # [x1, y1, x2, y2]
-
         color = [int(c) for c in colors[id_]]
         name = classes[id_]
-
         draw.rectangle(((bbox[0], bbox[1]), (bbox[2], bbox[3])), outline = tuple(color), width = 3)
-        draw.text((bbox[0], bbox[1]), name, fill = (255, 255, 255, 0))
+        draw.text((bbox[0], bbox[1]), name, fill = (0, 0, 0, 0))
+
     plt.imshow(np.array(img))
     plt.show()
 
@@ -91,15 +98,20 @@ def show(img, targets, labels, classes = voc_class):
 
 
 if __name__ == '__main__':
-    train_12_ds = dataload_voc(path2data, year = '2012', image_set = 'train', download = False)
-    train_07_ds = dataload_voc(path2data, year = '2007', image_set = 'train', download = False)
+
+    with open('../Data/voc.yaml') as file:
+        voc_data = yaml.load(file, Loader = yaml.FullLoader)
+    print(voc_data['train'])
+    train_12_ds = dataload_voc(voc_data['train'], year = '2012', image_set = 'train', download = False)
+    train_07_ds = dataload_voc(voc_data['train'], year = '2007', image_set = 'train', download = False)
+
+
     print(f'12 {len(train_12_ds)}, 07 {len(train_07_ds)}')
     train_ds = train_12_ds + train_07_ds
-    print(f'07+12 {len(train_ds)}')
-    img, target, label = train_ds[2]
-    colors = np.random.randint(0, 255, size = (80, 3), dtype = 'uint8')  # 바운딩 박스 색상
-    plt.figure(figsize = (10, 10))
-    show(img, target, label)
+    for i in range(len(train_ds)):
+        img, target, label = train_ds[i]
+        plt.figure(figsize = (10, 10))
+        data_set_show(img, target, label)
 
 
 
