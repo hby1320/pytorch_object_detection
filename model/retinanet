@@ -1,0 +1,45 @@
+import torch
+import torchvision
+from torch.nn import Conv2d, Upsample, MaxPool2d, AvgPool2d, ReLU, ReLU6, Hardswish,BatchNorm2d, Module
+
+
+
+class Stdconv(Module):
+    def __init__(self, input, output, k, s, p, d, b):
+        super().__init__()
+        self.Conv1 = Conv2d(in_channels = input,
+                            out_channels = output,
+                            kernel_size = k,
+                            stride = s,
+                            padding = p,
+                            dilation = d,
+                            bias = b
+                            )
+        self.act = ReLU()
+
+    def forward(self, x):
+        return BatchNorm2d(self.act(self.Conv1(x)))
+
+
+class Downconv(Module):
+    def __init__(self, input, output, k, s, p, d, b):
+        super().__init__()
+        self.Downsample = Conv2d(in_channels = input,
+                            out_channels = output,
+                            kernel_size = k,
+                            stride = s,
+                            padding = p,
+                            dilation = d,
+                            bias = b
+                            )
+
+    def forward(self, x):
+        return self.Downsample(x)
+
+
+
+class retinanet():
+
+    def __init__(self):
+        self.backboen = torchvision.models.resnet50(pretrained = True)
+        self.Conv1 = stdconv(32,64,3,1,)
