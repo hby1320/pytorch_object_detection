@@ -18,7 +18,7 @@ import os
 ## ->FIX 복수의 데이터세트에서 사용가능하게 수정하기  voc폴더에 한번에 불러 올수 있도록 수정 XML 데이터 불러오기 ## YAML 사용해서 파일로 정리
 ## -> coco 데이터세트도 동일하게 만들기
 ##
-with open('../Data/voc.yaml') as file:
+with open('./Data/voc.yaml') as file:
     voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
 # path2data = '../Data/voc'
