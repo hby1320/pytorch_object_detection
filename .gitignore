@@ -1,6 +1,9 @@
 # datasetlocation
 /Data/voc
 /Data/coco
+# Data file
+*.jpg
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
