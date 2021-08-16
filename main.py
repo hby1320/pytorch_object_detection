@@ -15,7 +15,7 @@ import os
 import yaml
 import numpy as np
 from PIL import Image
-from util.dataload import dataload_voc
+from utill.dataload import dataload_voc
 from efficientnet_pytorch import EfficientNet #pip install efficientnet_pytorch
 from torchsummary import summary
 from tqdm import tqdm

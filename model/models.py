@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 #     return p
 
 #  retina_net 비교군
+
 class RetinaNet(nn.Module):
 
     def __init__(self, num_class: int):
