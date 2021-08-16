@@ -1,12 +1,12 @@
 import torch
 import torchvision
 import torch.onnx
-from torch import nn
+import torch.nn as nn
 from efficientnet_pytorch.utils import MemoryEfficientSwish
 from efficientnet_pytorch import EfficientNet  # pip install efficientnet_pytorch
 from torchsummary import summary as summary
-import backbone.resnet50
-
+from model.backbone import resnet50
+from model.modules.modules import *
 from PIL import Image
 from torchvision import transforms as t
 import matplotlib.pyplot as plt
@@ -18,84 +18,113 @@ import matplotlib.pyplot as plt
 #         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
 #     return p
 
-
-class StdConv(nn.Module):  # TODO activation if add
-    def __init__(self, in_channel: int, out_channel: int, kernel: int, st=1, d=1):
-        super(StdConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels=in_channel,
-                              out_channels=out_channel,
-                              kernel_size=kernel,
-                              stride=st,
-                              padding=kernel//2,
-                              dilation=d)
-        self.bn = nn.BatchNorm2d(out_channel)
-        self.act = nn.ReLU(inplace=True)
-
-    def forward(self, x1: torch.Tensor) -> torch.Tensor:
-        return self.act(self.bn(self.conv(x1)))
-
-
-class DepthWiseConv2d(nn.Conv2d):
-    def __init__(self, in_channel: int, kernal: int, st=1):
-        super().__init__(in_channels=in_channel,
-                         out_channels=in_channel,
-                         kernel_size=kernal,
-                         stride=st,
-                         padding=kernal//2,
-                         groups=in_channel
-                         )
-
-
-class PointWiseConv(nn.Conv2d):
-    def __init__(self, in_channel: int, out_channel: int, kernel=1, st=1):
-        super().__init__(in_channels=in_channel,
-                         out_channels=out_channel,
-                         kernel_size=kernel,
-                         stride=st
-                         )
-
-
-class DownConv(nn.Conv2d):
-    def __init__(self, in_channel: int, out_channel: int, kernal=2, st=2):
-        super().__init__(in_channels=in_channel,
-                         out_channels=out_channel,
-                         kernel_size=kernal,
-                         stride=st,
-                         padding=st//2)
-
-
-class SeparableConv2d(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
-        super(SeparableConv2d, self).__init__()
-
-        self.depth_wise = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size, padding=kernel_size//2),
-            nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True),
-        )
-
-        self.point_wise = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x1: torch.Tensor) -> torch.Tensor:
-        return self.point_wise(self.depth_wise(x1))
-
-
 #  retina_net 비교군
 class RetinaNet(nn.Module):
 
-    def __init__(self):
+    def __init__(self, num_class: int):
         super().__init__()
-        self.backbone = torch
-        self.Conv1 = StdConv(32, 64, 3, 1, 1)
+        self.backbone = resnet50.ResNet50()
+        self.fpn = FeaturePyramid(64, 128, 255)
+        self.regression_sub_net = RegressionSubNet(256)
+        self.classification_sub_net = ClassificationSubNet(256, num_class=num_class)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        c3, c4, c5, p6, p7 = self.backbone(x)
-        print(f'{c3,c4,c5,p6,p7,}')
-        return c3
+        x = self.backbone(x)
+        return x
+
+
+class FeaturePyramid(nn.Module):
+    def __init__(self, c3_size: int, c4_size: int, c5_size: int, feature_size=256):
+        super(FeaturePyramid, self).__init__()
+
+        self.P5_1 = StdConv(c5_size, feature_size, 1, 1, 0)
+        self.P5_up = nn.Upsample(scale_factor=2, mode='nearest')
+        self.P5_2 = StdConv(feature_size, feature_size, 3, 1, 1)
+
+        self.P4_1 = StdConv(c4_size, feature_size, 1, 1, 0)
+        self.P4_up = nn.Upsample(scale_factor=2, mode='nearest')
+        self.P4_2 = StdConv(feature_size, feature_size, 3, 1, 1)
+
+        self.P3_1 = StdConv(c3_size, feature_size, 1, 1, 0)
+        self.P3_2 = StdConv(feature_size, feature_size, 3, 1, 1)
+
+        self.P6 = StdConv(c5_size, feature_size, 3, 2, 1)
+
+        self.P7_1 = nn.ReLU(inplace=True)
+        self.P7_2 = StdConv(feature_size, feature_size, 3, 2, 1)
+
+    def forward(self, x):
+        c3, c4, c5 = x
+
+        p5_x = self.P5_1(c5)
+        p5_up = self.P5_up(p5_x)
+        p5_x = self.p5_2(p5_x)
+
+        p4_x = self.P4_1(c4)
+        p4_x = torch.add(p5_up, p4_x)
+        p4_up = self.P4_up(p4_x)
+        p4_x = self.P4_2(p4_x)
+
+        p3_x = self.p3_1(c3)
+        p3_x = torch.add(p3_x, p4_up)
+
+        p6_x = self.P6(c5)
+
+        p7_x = self.P7_1(p6_x)
+        p7_x = self.P7_2(p7_x)
+
+        return [p3_x, p4_x, p5_x, p6_x, p7_x]
+
+
+class RegressionSubNet(nn.Module):
+    def __init__(self, in_channel: int, num_anchor=9, feature_size=256):
+        super(RegressionSubNet, self).__init__()
+        self.conv1 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv2 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv3 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv4 = StdConv(in_channel, feature_size, 3, 1)
+        self.output = nn.Conv2d(feature_size, num_anchor*4, 3, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        out = self.conv4(out)
+        out = self.output(out)
+        out = out.permute(0, 2, 3, 1)  # out.shape = B,C,W,H & with 4*num_anchors
+        return out.contiguous().view(out.shape[0], -1, 4)  # TODO 각 함수 기능 알아보기
+
+
+class ClassificationSubNet(nn.Module):
+    def __init__(self, in_channel, num_anchor=9, num_class=80, feature_size=256):    # prior=0.01,
+        super(ClassificationSubNet, self).__init__()
+
+        self.num_class = num_class
+        self.num_anchor = num_anchor
+
+        self.conv1 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv2 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv3 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv4 = StdConv(in_channel, feature_size, 3, 1)
+        self.output = nn.Conv2d(feature_size, num_anchor*num_class, kernel_size=3, padding=1)
+        self.output_act = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        out = self.conv4(out)
+
+        out = self.output(out)
+        out = self.output_act(out)
+
+        out1 = out.permute(0, 2, 3, 1)  # out.shape = B,C,W,H  with c = n_class * n_anchor
+
+        batch_size, width, height, channel = out1.shape
+
+        out2 = out1.view(batch_size, width, height, self.num_anchor, self.num_anchor)
+
+        return out2.contiguous().view(x.shape[0], -1, self.num_class)
 
 
 class TestModel(nn.Module):
@@ -132,16 +161,16 @@ if __name__ == '__main__':
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model_list = ['efficientnet-b0', 'efficientnet-b1', 'efficientnet-b2', 'efficientnet-b3', 'efficientnet-b4',
                   'efficientnet-b5', 'efficientnet-b6', 'efficientnet-b7']
+    dummy_data = torch.randn(3, 512, 512)
+    model = FeaturePyramid(256, 512, 1024).to(device)
+    summary(model, (256, 512, 512))
 
-    model = RetinaNet()
-    print(model)
-    summary(model, (3, 512, 512), device)
     # model = Test_model(model_list[0]).to(device)
     # print(model)
 
-    # model.set_swish(memory_efficient = False)
+    # model.set_swish(memory_efficient = False)z
     # model = retina_net()
-    dummy_data = torch.randn(3, 512, 512)
+
     # torch.onnx.export(model, dummy_data, "b0.onnx", verbose=True)
     # x = model(dummy_data)
     # print(model)
@@ -188,7 +217,7 @@ if __name__ == '__main__':
     #     def __init__.py(self):
     #         self.outputs = []
     #
-    #     def __call__(self, module, module_in, module_out):
+    #     def __call__(self, modules, module_in, module_out):
     #         self.outputs.append(module_out)
     #
     #     def clear(self):

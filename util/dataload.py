@@ -30,8 +30,8 @@ voc_class = voc_data['class']
 
 class dataload_voc(VOCDetection):
 
-    # def __init__(self, cfg_yaml, root: str):
-    #     super().__init__(root)
+    # def __init__.py(self, cfg_yaml, root: str):
+    #     super().__init__.py(root)
     #
     #     with open(cfg_yaml) as file:
     #         voc_data = yaml.load(file, Loader = yaml.FullLoad)
@@ -184,7 +184,7 @@ if __name__ == '__main__':
 #
 # class biled_Dataset(torch.utils.data.Dataset):
 #
-#     def __init__(self, root, transforms):
+#     def __init__.py(self, root, transforms):
 #         self.root = root
 #         self.transforms = transforms
 #         self.imgs = list(sorted(os.listdir(os.path.join(root, 'PNGImages'))))
