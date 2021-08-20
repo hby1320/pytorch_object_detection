@@ -1,37 +1,54 @@
 import torch
 import torch.nn as nn
 import torchvision
-import torchsummary as summary
+from utill.utills import model_info
 
 
 class ResNet50(nn.Module):
-    def __init__(self):
+    def __init__(self, re_layer=1):
         super(ResNet50, self).__init__()
 
-        resnet50 = torchvision.models.resnet50(pretrained=True,)
+        resnet50 = torchvision.models.resnet50(pretrained = True)
         self.conv1 = resnet50.conv1
         self.bn1 = resnet50.bn1
         self.relu = resnet50.relu
-        self.maxpool = resnet50.maxpool
+        self.max_pool = resnet50.maxpool
         self.layer1 = resnet50.layer1
         self.layer2 = resnet50.layer2
         self.layer3 = resnet50.layer3
         self.layer4 = resnet50.layer4
+        self.re_layer = re_layer
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool(x)
+        x = self.max_pool(x)
+        x1 = self.layer1(x)
+        x2 = self.layer2(x1)
+        x3 = self.layer3(x2)
+        x4 = self.layer4(x3)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        return x
+        if self.re_layer == 1:
+            return x4
+        elif self.re_layer == 2:
+            return x3,x4
+        elif self.re_layer == 3:
+            return x2, x3, x4
+        elif self.re_layer == 4:
+            return x1, x2, x3, x4
+        else:
+            print(f' self.re_layer over range')
+    """
+    Input : 1, 3, 512, 512
+    Total params: 23,508,032
+    Trainable params: 23,508,032
+    Non-trainable params: 0 
+    Total mult-adds (G): 103.38
+    """
 
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = ResNet50().to(device)
-    summary.torchsummary.summary(model, (3, 512, 512))
+    model = ResNet50(3).to(device)
+    model_info(model, 1, 3, 512, 512, device)

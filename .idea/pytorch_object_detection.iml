@@ -3,8 +3,10 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/model/backbone" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/model/models" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/model/modules" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/model" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/model/od" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/utill" isTestSource="false" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (touch) (3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
