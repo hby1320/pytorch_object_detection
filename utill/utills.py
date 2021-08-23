@@ -11,7 +11,6 @@ def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, de
     summary(model, img.size(), None, None, col_names, depth = depth)
 
 
-
 def generate_anchor(base_size=16, ratios=None, scales=None):
     if ratios is None:
         ratios = np.array([0.5, 1, 2])
@@ -51,3 +50,5 @@ def shift_xy(shape, stride, anchor):
     all_anchor = all_anchor.reshape((K*A, 4))
 
     return all_anchor
+
+

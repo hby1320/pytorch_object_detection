@@ -1,6 +1,6 @@
 # datasetlocation
-/Data/voc
-/Data/coco
+/data/voc
+/data/coco
 # Data file
 *.jpg
 

@@ -1,27 +1,3 @@
-import torch
-import torchvision
-import tqdm
-from torch.nn import *
-import torchsummary as summary
-from torchvision.datasets import VOCDetection, CocoDetection, ImageFolder
-from torchvision.transforms.functional import to_tensor, to_pil_image
-from torchvision.transforms import transforms
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image, ImageDraw, ImageFont  # image processing
-import albumentations as a  # Data augmentation
-from albumentations.pytorch import ToTensorV2
-import matplotlib.pyplot as plt
-import os
-import yaml
-import numpy as np
-from PIL import Image
-from utill.dataload import dataload_voc
-from efficientnet_pytorch import EfficientNet #pip install efficientnet_pytorch
-from torchsummary import summary
-from tqdm import tqdm
-import time
-
-
 #
 # def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 #     since = time.time()
