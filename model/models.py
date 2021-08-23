@@ -37,12 +37,10 @@ class TestModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.backbone.extract_features(x)
-        print(x.shape)
         x = self.Conv1(x)
         x = self.Conv2(x)
         x = self.Conv3(x)
         x = self.Conv4(x)
-        print(x.shape)
         # x4 = fs['reduction_5']
         # x3 = fs['reduction_4']
         # x2 = fs['reduction_3']
