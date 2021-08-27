@@ -13,20 +13,22 @@ import collections
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import yaml
-import os
+from dataset.pascalvoc import PascalVoc
+from utill.utills import DataEncoder
+import cv2
 
 ## ->FIX 복수의 데이터세트에서 사용가능하게 수정하기  voc폴더에 한번에 불러 올수 있도록 수정 XML 데이터 불러오기 ## YAML 사용해서 파일로 정리
 ## -> coco 데이터세트도 동일하게 만들기
 ##
-with open('./Data/voc.yaml') as file:
-    voc_data = yaml.load(file, Loader=yaml.FullLoader)
+# with open('./Data/voc.yaml') as file:
+#     voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
 # path2data = '../Data/voc'
 # if not os.path.exists(path2data):
 #     os.mkdir(path2data)
 #
-
-voc_class = voc_data['class']
+#
+# voc_class = voc_data['class']
 
 class dataload_voc(VOCDetection):
 
@@ -50,10 +52,12 @@ class dataload_voc(VOCDetection):
             targets.append(list(label[:4]))  # 바운딩 박스 좌표
             labels.append(label[4])  # 바운딩 박스 클래스
 
-        if self.transforms:
-            augmentations = self.transforms(image = img, bboxes = targets)
-            img = augmentations['image']
-            targets = augmentations['bboxes']
+        # if self.transforms:
+        #     augmentations = self.transforms(image = img, bboxes = targets)
+        #     img = augmentations['image']
+        #     targets = augmentations['bboxes']
+        if self.transforms is not None:
+            img, target = self.transforms(img, target)
 
         return img, targets, labels
 
@@ -74,7 +78,7 @@ class dataload_voc(VOCDetection):
                 voc_dict[node.tag] = text
         return voc_dict
 
-def data_set_show(img, targets, labels, classes = voc_class):
+def data_set_show(img, targets, labels, classes):
     img = to_pil_image(img)
     draw = ImageDraw.Draw(img)
     targets = np.array(targets)
@@ -98,22 +102,51 @@ def data_set_show(img, targets, labels, classes = voc_class):
 
 
 if __name__ == '__main__':
+    IMAGE_SIZE = 600
+    scale = 1.0
+    # train_transforms = A.Compose([
+    #     A.LongestMaxSize(max_size = int(IMAGE_SIZE * scale)),
+    #     A.PadIfNeeded(min_height = int(IMAGE_SIZE * scale), min_width = int(IMAGE_SIZE * scale),
+    #                   border_mode = cv2.BORDER_CONSTANT),
+    #     ToTensorV2()
+    # ],
+    #     bbox_params = A.BboxParams(format = 'pascal_voc', min_visibility = 0.4, label_fields = [])
+    # )
 
-    with open('../Data/voc.yaml') as file:
+
+    # transforms 적용하기
+    # transforms = train_transforms
+    #
+    # transform_train = torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+    data_transform = torchvision.transforms.Compose([
+        torchvision.transforms.Resize((600, 600)),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize(mean = [0.485, 0.456, 0.406],
+                             std = [0.229, 0.224, 0.225])
+    ])
+    with open('./voc.yaml') as file:
         voc_data = yaml.load(file, Loader = yaml.FullLoader)
     print(voc_data['train'])
-    train_12_ds = dataload_voc(voc_data['train'], year = '2012', image_set = 'train', download = False)
-    train_07_ds = dataload_voc(voc_data['train'], year = '2007', image_set = 'train', download = False)
+    # train_12_ds = dataload_voc(voc_data['train'], year = '2012', image_set = 'train', download = False)
+    # train_07_ds = dataload_voc(voc_data['train'], year = '2007', image_set = 'train', download = False)
+    # print(f'12 {len(train_12_ds)}, 07 {len(train_07_ds)}')
+    # train_ds = train_12_ds + train_07_ds
+    a = PascalVoc(root = "./voc", year = "2007", image_set = "train", download = False, transforms = data_transform)
+    b = PascalVoc(root = "./voc", year = "2012", image_set = "train", download = False, transforms = data_transform)
+    train_ds = a + b
 
 
-    print(f'12 {len(train_12_ds)}, 07 {len(train_07_ds)}')
-    train_ds = train_12_ds + train_07_ds
-    for i in range(len(train_ds)):
-        img, target, label = train_ds[i]
-        plt.figure(figsize = (10, 10))
-        data_set_show(img, target, label)
+    test_data = DataLoader(a, batch_size = 1, shuffle = True, num_workers = 4, collate_fn = a.retina_collate_fn)
 
-#
+    # for i in range(10):
+    #     img, target, label = train_ds[i]
+    #     plt.figure(figsize = (10, 10))
+    #     data_set_show(img, target, label, voc_data['class'])
+    for i, (img, targets, labels) in enumerate(test_data):
+        print(img.shape)
+        d = targets
+        e = labels
+    #
 #
 # import torch
 # import xml.etree.ElementTree as et

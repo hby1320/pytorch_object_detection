@@ -23,10 +23,10 @@ class EfficientNetV1(nn.Module):
 
     def forward(self, x:torch.Tensor) -> torch.tensor:
         x = self.model.extract_endpoints(x)
-        return [x['reduction_1'],x['reduction_2'],x['reduction_3'],x['reduction_4'],x['reduction_5'],x['reduction_6']]
+        return [x['reduction_1'],x['reduction_2'],x['reduction_3'],x['reduction_4'],x['reduction_5']]
 
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = EfficientNetV1(0).to(device)
+    model = EfficientNetV1(7).to(device)
     model_info(model, 1, 3, 512, 512, device)
