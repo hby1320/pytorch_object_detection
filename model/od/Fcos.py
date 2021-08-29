@@ -59,11 +59,11 @@ class FeaturePyramidNetwork(nn.Module):
         p5 = self.P5(c5)
         p4_c = self.P4(c4)
         p3_c = self.P3(c3)
-
         p4 = self.P5_Up(p5)
-        p4 = torch.add(p4_c, p4)
+        p4 = torch.add(p4, p4_c)
+
         p3 = self.P4_Up(p4)
-        p3 = torch.add(p3_c, p3)
+        p3 = torch.add(p3, p3_c)
 
         p3 = self.P3_c1(p3)
         p4 = self.P4_c1(p4)
@@ -126,22 +126,23 @@ class ScaleExp(nn.Module):
 
 
 class GenTargets(nn.Module):
-    def __init__(self, s: List[int], limit_range: List[int]):
+    def __init__(self, strides: List[int], limit_range: List[int]):
         super(GenTargets, self).__init__()
-        self.stride = s
+        self.stride = strides
         self.lim_range = limit_range
-        assert len(s) == len(limit_range) ## s와 범위 동일해야됨
+        assert len(strides) == len(limit_range) ## s와 범위 동일해야됨
 
     def forward(self,x: torch.Tensor) -> torch.Tensor:
-        logit, gt_box, labels = x
-        cls_logit, center_logit, reg_logit = logit
-        assert len(gt_box) == len(labels)
+        cls_logit, center_logit, reg_logit = x[0]
+        gt_box = x[1]
+        labels = x[2]
         cls_target = []
         center_target = []
         reg_target = []
-        for lv in range(len(logit)):
-            lv_out = [cls_logit[lv],center_logit[lv], reg_logit[lv]]
-            level_targets = self.generate_target(lv_out, gt_box, labels, self.stride[lv], self.lim_range[[lv]])
+        assert len(gt_box) == len(labels)
+        for lv in range(len(cls_logit)):
+            lv_out = [cls_logit[lv], center_logit[lv], reg_logit[lv]]
+            level_targets = self.generate_target(lv_out, gt_box, labels, self.stride[lv], self.lim_range[lv])
             cls_target.append(level_targets[0])
             center_target.append(level_targets[1])
             reg_target.append(level_targets[2])
@@ -150,18 +151,18 @@ class GenTargets(nn.Module):
 
     def coords_origin_fcos(self, feature: torch.Tensor, strides=List[int]):
         h, w = feature.shape[1:3]
-        shifts_x = torch.range(0, w * strides, strides, dtype = torch.float32)
-        shifts_y = torch.range(0, h * strides, strides, dtype = torch.float32)
+        shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
+        shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
 
         shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
-        shift_x = torch.reshape(shift_x,[-1])
+        shift_x = torch.reshape(shift_x, [-1])
         shift_y = torch.reshape(shift_y, [-1])
         coords = torch.stack([shift_x, shift_y], -1) + strides // 2
         return coords
 
 
-    def generate_target(self, lv_out: torch.Tensor, gt_box:torch.Tensor, labels: torch.Tensor,
-                        stride:List[int], lim_range: List[int], sample_radio_ratio=1.5
+    def generate_target(self, lv_out, gt_box, labels,
+                        stride, lim_range, sample_radio_ratio=1.5
                         ):
         cls_logit, center_logit, reg_logit = lv_out
         batch = cls_logit.shape[0]
@@ -171,25 +172,26 @@ class GenTargets(nn.Module):
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
         coords = self.coords_origin_fcos(cls_logit, stride)
 
-        # cls_logit = cls_logit.reshape(batch, -1, class_num)
-        # center_logit = center_logit.permute(0, 2, 3, 1)
-        # center_logit = center_logit.reshape(batch, -1, 1)
-        # reg_logit = reg_logit.permute(0, 2, 3, 1)
-        # reg_logit = reg_logit.reshape(batch, -1, 4)
+        cls_logit = cls_logit.reshape((batch, -1, class_num))
+        center_logit = center_logit.permute(0, 2, 3, 1)
+        center_logit = center_logit.reshape((batch, -1, 1))
+        reg_logit = reg_logit.permute(0, 2, 3, 1)
+        reg_logit = reg_logit.reshape((batch, -1, 4))
 
-        # hw = reg_logit[1]
+        hw = cls_logit.shape[1]
 
         x = coords[:,0]
         y = coords[:,1]
-        left_offset = x[None, :None, ] - gt_box[..., 0][:, None, :]
-        top_offset = y[None, :None, ] - gt_box[..., 1][:, None, :]
+        left_offset = x[None, :,None] - gt_box[..., 0][:, None, :]
+        top_offset = y[None, :,None] - gt_box[..., 1][:, None, :]
         right_offset = gt_box[...,2][:, None, :] - x[None, :, None]
-        bottom_offset = gt_box[...,3][:, None, :] - x[None, :, None]
+        bottom_offset = gt_box[...,3][:, None, :] - y[None, :, None]
         offset = torch.stack([left_offset, top_offset, right_offset, bottom_offset], dim= -1)
 
-        area = (offset[...,0]+offset[...,2]*(offset[...,1]+offset[...,3]))
+        area = (offset[...,0]+offset[...,2])*(offset[...,1]+offset[...,3])
+
         offset_min = torch.min(offset, dim=-1)[0]
-        offset_max = torch.max(offset, dim = -1)[0]
+        offset_max = torch.max(offset, dim=-1)[0]
 
         mask_gt = offset_min > 0
         mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
@@ -200,9 +202,10 @@ class GenTargets(nn.Module):
         gt_top_offset = y[None, :, None] - gt_center_y[:, None, :]
         gt_right_offset = gt_center_x[:, None, :] - x[None, :, None]
         gt_bottom_offset = gt_center_y[:, None, :] - y[None, :, None]
-        gt_offset = torch.stack([gt_left_offset, gt_top_offset, gt_right_offset, gt_bottom_offset], dim = -1)
+        gt_offset = torch.stack([gt_left_offset, gt_top_offset, gt_right_offset, gt_bottom_offset], dim =-1)
         gt_off_max = torch.max(gt_offset, dim = -1)[0]
         mask_center = gt_off_max < ratio
+
         mask_pos = mask_gt & mask_lv & mask_center
 
         area[~mask_pos] = 99999999
@@ -210,9 +213,9 @@ class GenTargets(nn.Module):
         reg_target = offset[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim=-1),1)]
         reg_target = torch.reshape(reg_target,(batch, -1, 4))
 
-        classes = torch.broadcast_tensors(labels[:, None, :], area.loge())[0]
+        classes = torch.broadcast_tensors(labels[:, None, :], area.long())[0]
         cls_target = classes[torch.zeros_like(area, dtype = torch.bool).scatter_(
-            -1, area_min_index.unsqeeze(dim= -1),1)]
+            -1, area_min_index.unsqueeze(dim= -1),1)]
         cls_target = torch.reshape(cls_target, (batch, -1, 1))
 
         left_right_min = torch.min(reg_target[..., 0], reg_target[..., 2])  # [batch_size,h*w]
@@ -222,8 +225,13 @@ class GenTargets(nn.Module):
         center_target = torch.sqrt(((left_right_min * top_bottom_min) / (left_right_max * top_bottom_max + 1e-10)))
         center_target = center_target.unsqueeze(dim=-1)
 
+        assert reg_target.shape == (batch, hw, 4)
+        assert cls_target.shape == (batch, hw, 1)
+        assert center_target.shape == (batch, hw, 1)
+
         mask_pos_2 = mask_pos.long().sum(dim = -1)
         mask_pos_2 = mask_pos_2 >= 1
+        assert mask_pos_2.shape == (batch, hw)
         cls_target[~mask_pos_2] = 0
         center_target[~mask_pos_2] = -1
         reg_target[~mask_pos_2] = -1
@@ -243,7 +251,6 @@ class Loss(nn.Module):
         cls_loss = self.compute_cls_loss(cls_logit, cls_target, mask_pos).mean()  # []
         cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
         reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos).mean()
-
         total_loss = cls_loss + cnt_loss + reg_loss
         return cls_loss, cnt_loss, reg_loss, total_loss
 
@@ -259,11 +266,12 @@ class Loss(nn.Module):
             pred = torch.reshape(pred, [batch_size, -1, class_num])
             pred_reshape.append(pred)
         preds = torch.cat(pred_reshape, dim = 1)  # [batch_size,sum(_h*_w),class_num]
+        assert preds.shape[:2] == target.shape[:2]
         loss = []
         for batch_index in range(batch_size):
             pred_pos = preds[batch_index]  # [sum(_h*_w),class_num]
             target_pos = target[batch_index]  # [sum(_h*_w),1]
-            target_pos = (torch.arange(1, class_num + 1, device = target_pos.device)[None, :] == target_pos)  # .float()
+            target_pos = (torch.arange(1, class_num + 1, device = target_pos.device)[None, :] == target_pos).float()  # .float()
             # sparse--> one-hot
             loss.append(self.focal_loss_from_logits(pred_pos, target_pos).view(1))
         return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
@@ -301,7 +309,7 @@ class Loss(nn.Module):
             pred = pred.permute(0, 2, 3, 1)
             pred = torch.reshape(pred, [batch_size, -1, c])
             preds_reshape.append(pred)
-        preds = torch.cat(preds_reshape, dim = 1)
+        preds = torch.cat(preds_reshape, dim=1)
         assert preds.shape == target.shape  # [batch_size,sum(_h*_w),4]
         loss = []
         for batch_index in range(batch_size):
@@ -323,12 +331,13 @@ class Loss(nn.Module):
         targets: [n,class_num]
         '''
         preds = preds.sigmoid()
+
         pt = preds * targets + (1.0 - preds) * (1.0 - targets)
         w = alpha * targets + (1.0 - alpha) * (1.0 - targets)
         loss = -w * torch.pow((1.0 - pt), gamma) * pt.log()
         return loss.sum()
 
-    def giou_loss(preds, targets):
+    def giou_loss(self, preds, targets):
         '''
         Args:
         preds: [n,4] ltrb
