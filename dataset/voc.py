@@ -4,9 +4,9 @@ import os
 import cv2
 import numpy as np
 from torchvision import transforms
-from PIL import  Image
+from PIL import Image
 import random
-import torch.nn.functional as F
+from typing import List
 
 def flip(img, boxes):
     img = img.transpose(Image.FLIP_LEFT_RIGHT)
@@ -18,6 +18,7 @@ def flip(img, boxes):
         boxes[:, 0] = xmin
     return img, boxes
 
+
 class VOCDataset(torch.utils.data.Dataset):
     CLASSES_NAME = (
         "__background__ ", "aeroplane", "bicycle", "bird", "boat",
@@ -25,7 +26,7 @@ class VOCDataset(torch.utils.data.Dataset):
         "cow",  "diningtable", "dog", "horse", "motorbike",
         "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
 
-    def __init__(self,root_dir, resize_size=[800, 1333],
+    def __init__(self,root_dir, resize_size:List[int],
                  split='trainval', use_difficult=False, is_train=True, augment=None):
         self.root = root_dir
         self.use_difficult = use_difficult
@@ -45,7 +46,7 @@ class VOCDataset(torch.utils.data.Dataset):
         self.std = [0.229, 0.224, 0.225]
         self.train = is_train
         self.augment = augment
-        print("INFO=====>voc dataset init finished  ! !")
+        print(f"INFO=====>voc dataset init finished!!")
 
     def __len__(self):
         return len(self.img_ids)
@@ -87,7 +88,7 @@ class VOCDataset(torch.utils.data.Dataset):
             if self.augment is not None:
                 img, boxes = self.augment(img, boxes)
         img = np.array(img)
-        img,boxes = self.preprocess_img_boxes(img,boxes,self.resize_size)
+        img, boxes = self.preprocess_img_boxes(img,boxes,self.resize_size)
 
         img = transforms.ToTensor()(img)
         boxes = torch.from_numpy(boxes)
@@ -140,9 +141,9 @@ class VOCDataset(torch.utils.data.Dataset):
         max_h = np.array(h_list).max()
         max_w = np.array(w_list).max()
         for i in range(batch_size):
-            img=imgs_list[i]
+            img = imgs_list[i]
             pad_imgs_list.append(transforms.Normalize(self.mean, self.std, inplace=True)
-                                 (F.pad(img, (0, int(max_w-img.shape[2]), 0, int(max_h-img.shape[1])), value=0.)))
+                                 (torch.nn.functional.pad(img, (0, int(max_w-img.shape[2]), 0, int(max_h-img.shape[1])), value=0.)))
 
 
         max_num = 0
@@ -151,8 +152,8 @@ class VOCDataset(torch.utils.data.Dataset):
             if n > max_num:
                 max_num = n
         for i in range(batch_size):
-            pad_boxes_list.append(F.pad(boxes_list[i],(0, 0, 0, max_num-boxes_list[i].shape[0]),value = -1))
-            pad_classes_list.append(F.pad(classes_list[i],(0, max_num-classes_list[i].shape[0]),value = -1))
+            pad_boxes_list.append(torch.nn.functional.pad(boxes_list[i],(0, 0, 0, max_num-boxes_list[i].shape[0]),value = -1))
+            pad_classes_list.append(torch.nn.functional.pad(classes_list[i],(0, max_num-classes_list[i].shape[0]),value = -1))
 
 
         batch_boxes=torch.stack(pad_boxes_list)
@@ -164,12 +165,12 @@ class VOCDataset(torch.utils.data.Dataset):
 
 if __name__=="__main__":
     pass
-    eval_dataset = VOCDataset(root_dir='/Users/VOCdevkit/VOCdevkit/VOC0712', resize_size=[800, 1333],
-                               split='test', use_difficult=False, is_train=False, augment=None)
+    eval_dataset = VOCDataset(root_dir='../data/voc/VOCdevkit/VOC2007', resize_size=[512, 512], split='train',
+                              use_difficult=False, is_train=False, augment=None)
     print(len(eval_dataset.CLASSES_NAME))
-    #dataset=VOCDataset("/home/data/voc2007_2012/VOCdevkit/VOC2012",split='trainval')
+    dataset= VOCDataset("../data/voc/VOCdevkit/VOC2007",resize_size=[800, 1333], split='train')
     # for i in range(100):
-    #     img,boxes,classes=dataset[i]
+    #     img,boxes,classes=eval_dataset[i]
     #     img,boxes,classes=img.numpy().astype(np.uint8),boxes.numpy(),classes.numpy()
     #     img=np.transpose(img,(1,2,0))
     #     print(img.shape)
@@ -178,17 +179,17 @@ if __name__=="__main__":
     #     for box in boxes:
     #         pt1=(int(box[0]),int(box[1]))
     #         pt2=(int(box[2]),int(box[3]))
-    #         img=cv2.rectangle(img,pt1,pt2,[0,255,0],3)
+    #         # img=cv2.rectangle(img,pt1,pt2,[0,255,0],3)
     #     cv2.imshow("test",img)
     #     if cv2.waitKey(0)==27:
     #         break
-    #imgs,boxes,classes=eval_dataset.collate_fn([dataset[105],dataset[101],dataset[200]])
-    # print(boxes,classes,"\n",imgs.shape,boxes.shape,classes.shape,boxes.dtype,classes.dtype,imgs.dtype)
-    # for index,i in enumerate(imgs):
-    #     i=i.numpy().astype(np.uint8)
-    #     i=np.transpose(i,(1,2,0))
-    #     i=cv2.cvtColor(i,cv2.COLOR_RGB2BGR)
-    #     print(i.shape,type(i))
-    #     cv2.imwrite(str(index)+".jpg",i)
+    imgs, boxes, classes= eval_dataset.collate_fn([dataset[105],dataset[101],dataset[200]])
+    print(boxes,classes,"\n",imgs.shape,boxes.shape,classes.shape,boxes.dtype,classes.dtype,imgs.dtype)
+    for index,i in enumerate(imgs):
+        i=i.numpy().astype(np.uint8)
+        i=np.transpose(i,(1,2,0))
+        i=cv2.cvtColor(i,cv2.COLOR_RGB2BGR)
+        print(i.shape,type(i))
+        cv2.imwrite(str(index)+".jpg",i)
 
 

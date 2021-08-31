@@ -3,16 +3,18 @@ import os
 import torch.distributed
 from torch.utils.data import DataLoader, ConcatDataset
 import torch.utils.tensorboard
-import tqdm
+from tqdm import tqdm
 import torch
 # from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
 from model.od import Fcos, proposed
 from model.od.Fcos import GenTargets, Loss
 from utill.utills import model_info,PolyLR
-from torch.optim import adam, adamw, SGD, Optimizer
-
+from torch.optim import adam, adamw, SGD, Optimizer, Adam
+import torch.backends.cudnn as cudnn
+import numpy as np
 from torchvision.transforms import transforms
+import random
 
 EPOCH = 100
 LR_INIT = 2e-3
@@ -23,6 +25,12 @@ amp_enabled = False
 ddp_enabled = False
 if __name__ == '__main__':
     torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+    np.random.seed(0)
+    cudnn.benchmark = False
+    cudnn.deterministic = True
+    random.seed(0)
 
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -48,17 +56,19 @@ if __name__ == '__main__':
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
 
+
     #  1 Data load
     # voc_07_train = PascalVoc(root='./data/voc', year = "2007", image_set = "train", download = False, transforms = transform)
     # voc_12_train = PascalVoc(root='./data/voc', year = "2012", image_set = "train", download = False, transforms = transform)
     # voc_07_trainval = PascalVoc(root = './data/voc', year = "2012", image_set = "trainval", download = False)
-    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", True, True,)
-    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", True, True, )
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True, )
-    voc_train = ConcatDataset([voc_07_train, voc_12_train])
-    train_dataloder = DataLoader(voc_train, batch_size = 2, num_workers =4, collate_fn = voc_07_train.collate_fn)
-    valid_dataloder = DataLoader(voc_07_trainval, batch_size = 2, num_workers = 4, collate_fn = voc_07_trainval.
-                                 collate_fn)
+    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", False, True, )
+    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, )
+    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
+    voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+    train_dataloder = DataLoader(voc_train, batch_size = 2,shuffle = True, num_workers =4,
+                                 collate_fn = voc_07_train.collate_fn, worker_init_fn=np.random.seed(0))
+    valid_dataloder = DataLoader(voc_07_trainval, batch_size = 2, num_workers = 4,
+                                 collate_fn = voc_07_trainval.collate_fn)
 
     model = Fcos.FCOS([2048, 1024, 512], 20, 256).to(device)
     if ddp_enabled:
@@ -66,12 +76,15 @@ if __name__ == '__main__':
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     print(f'Activated model: {model_name} (rank{local_rank})')
-    optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
+    # optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
+    optimizer = Adam(model.parameters(), lr=LR_INIT)
     scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
     gen_target = GenTargets(strides=[8,16,32,64,128], limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
-    loss_fcos = Loss()
+    loss = Loss()
 
+
+    nb = len(train_dataloder)
     start_epoch = 0
     prev_mAP = 0.0
     prev_val_loss = 2 ** 32 - 1
@@ -83,7 +96,7 @@ if __name__ == '__main__':
         writer = None
 
     # 5 Train & val
-    for epoch in tqdm.tqdm(range(start_epoch, EPOCH), desc = 'Epoch', disable = False if local_rank == 0 else True):
+    for epoch in tqdm(range(start_epoch, EPOCH), desc = 'Epoch', disable = False if local_rank == 0 else True):
 
         # if torch.utils.train_interupter.train_interupter():
         #     print('Train interrupt occurs.')
@@ -93,35 +106,38 @@ if __name__ == '__main__':
         #     train_dataloder.sampler.set_epoch(epoch)
         #     torch.distributed.barrier()
         model.train()
-
-        for batch_idx, (imgs, targets, classes) in enumerate(tqdm.tqdm(train_dataloder, desc='Batch', leave=False,
-                                                                       disable=False if local_rank == 0 else True)):
+        pbar = enumerate(train_dataloder)
+        pbar = tqdm(pbar, total=nb, desc='Batch', leave=False, disable=False if local_rank == 0 else True)
+        for batch_idx, (imgs, targets, classes) in pbar:
 
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-            optimizer.zero_grad(set_to_none = True)
-            with torch.cuda.amp.autocast(enabled = amp_enabled):
-                outputs = model(imgs)
-                targets = gen_target([outputs, targets, classes])
-                losses = loss_fcos([outputs, targets])
-                lossess = losses[-1]
-            scaler.scale(lossess.mean()).backward()
+            optimizer.zero_grad()
+            # with torch.cuda.amp.autocast(enabled = amp_enabled):
+            outputs = model(imgs)
+            targets = gen_target([outputs, targets, classes])
+            total_loss = loss([outputs, targets])
+            scaler.scale(total_loss[-1].mean()).backward()  # ? lossess ? lossess.mean()?
             scaler.step(optimizer)
             scaler.update()
 
             if ddp_enabled:
                 loss_list = [torch.zeros(1, device = device) for _ in range(world_size)]
-                torch.distributed.all_gather_multigpu([loss_list], [losses])
+                torch.distributed.all_gather_multigpu([loss_list], [total_loss])
                 if writer is not None:
                     for i, rank_loss in enumerate(loss_list):
                         writer.add_scalar(f'loss/training (rank{i})', rank_loss.item(), iters)
                     writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             else:
-                writer.add_scalar(f'loss/training (rank{local_rank})', lossess, iters)
+                # writer.add_scalar(f'loss/training (rank{local_rank})', cls_loss, iters)
+                # writer.add_scalar(f'loss/training (rank{local_rank})', cnt_loss, iters)
+                # writer.add_scalar(f'loss/training (rank{local_rank})', reg_loss, iters)
+                writer.add_scalar(f'loss/training (rank{local_rank})', total_loss[-1], iters)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
-
+            s = ('%10.4g' * 4) % (total_loss[0], total_loss[1], total_loss[2], total_loss[3])
+            pbar.set_description(s)
             scheduler.step()
 
-        torch.save(model.state_dict(),
-                   "./checkpoint/model_{}.pth".format(epoch + 1))
+        ##  epoch 마다 저장
+        # torch.save(model.state_dict(), f"./checkpoint/model_{epoch + 1}.pth")
 

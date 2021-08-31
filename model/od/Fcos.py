@@ -37,6 +37,7 @@ class FCOS (nn.Module):
             center.append(center_logit)
             reg_logit = self.regression_sub(feature)
             reg.append(self.scale_exp[i](reg_logit))
+
         return cls, center, reg
 
 
@@ -146,7 +147,7 @@ class GenTargets(nn.Module):
             cls_target.append(level_targets[0])
             center_target.append(level_targets[1])
             reg_target.append(level_targets[2])
-        return torch.cat(cls_target,dim = 1), torch.cat(center_target,dim = 1), torch.cat(reg_target,dim = 1)
+        return torch.cat(cls_target, dim=1), torch.cat(center_target, dim=1), torch.cat(reg_target, dim=1)
 
 
     def coords_origin_fcos(self, feature: torch.Tensor, strides=List[int]):
@@ -222,8 +223,9 @@ class GenTargets(nn.Module):
         left_right_max = torch.max(reg_target[..., 0], reg_target[..., 2])
         top_bottom_min = torch.min(reg_target[..., 1], reg_target[..., 3])
         top_bottom_max = torch.max(reg_target[..., 1], reg_target[..., 3])
-        center_target = torch.sqrt(((left_right_min * top_bottom_min) / (left_right_max * top_bottom_max + 1e-10)))
-        center_target = center_target.unsqueeze(dim=-1)
+        center_target = ((left_right_min * top_bottom_min) / (left_right_max * top_bottom_max + 1e-10))\
+            .sqrt().unsqueeze(dim=-1)
+        # center_target = center_target
 
         assert reg_target.shape == (batch, hw, 4)
         assert cls_target.shape == (batch, hw, 1)
@@ -243,29 +245,33 @@ class Loss(nn.Module):
     def __init__(self):
         super(Loss, self).__init__()
 
-    def forward(self, input: torch.Tensor):
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
         pred, target = input
         cls_logit, cen_logit, reg_logit = pred
         cls_target, cen_target, reg_target = target
-        mask_pos = (cen_target > -1).squeeze(dim = -1)
-        cls_loss = self.compute_cls_loss(cls_logit, cls_target, mask_pos).mean()  # []
+        mask_pos = (cen_target > -1).squeeze(dim=-1)
+
+        cls_loss = torch.mean(self.compute_cls_loss(cls_logit, cls_target, mask_pos)) # []
         cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
         reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos).mean()
         total_loss = cls_loss + cnt_loss + reg_loss
+        print(f"total_loss : {total_loss}, cls_loss : {cls_loss}, cnt_loss : {cnt_loss}, reg_loss : {reg_loss}")
         return cls_loss, cnt_loss, reg_loss, total_loss
+
 
     def compute_cls_loss(self, preds, target, mask):
         batch_size = target.shape[0]
-        pred_reshape = []
-        class_num = preds[0].shape[1]
-        mask = mask.unsqueeze(dim = -1)
+        preds_reshape = []
+        class_num = preds[0].shape[1] # 20 ?
+        mask = mask.unsqueeze(dim = -1)   #  torch.Size([2, 4724, 1])
         # mask=targets>-1#[batch_size,sum(_h*_w),1]
-        num_pos = torch.sum(mask, dim = [1, 2]).clamp_(min = 1).float()  # [batch_size,]
+        num_pos = torch.sum(mask, dim = [1, 2]).clamp_(min = 1).float()  # [batch_size,]  #
         for pred in preds:
             pred = pred.permute(0, 2, 3, 1)
             pred = torch.reshape(pred, [batch_size, -1, class_num])
-            pred_reshape.append(pred)
-        preds = torch.cat(pred_reshape, dim = 1)  # [batch_size,sum(_h*_w),class_num]
+            preds_reshape.append(pred)
+        preds = torch.cat(preds_reshape, dim=1)  # [batch_size,sum(_h*_w),class_num]
         assert preds.shape[:2] == target.shape[:2]
         loss = []
         for batch_index in range(batch_size):
@@ -273,8 +279,13 @@ class Loss(nn.Module):
             target_pos = target[batch_index]  # [sum(_h*_w),1]
             target_pos = (torch.arange(1, class_num + 1, device = target_pos.device)[None, :] == target_pos).float()  # .float()
             # sparse--> one-hot
+            # loss.append(self.focal_loss_from_logits(pred_pos, target_pos).view(1))
+            # pred_pos_sm = torch.softmax(pred_pos)
+            # print(torch.nn.functional.BCEWithLogitsLoss(pred_pos_sm, target_pos))
+            # loss.append(self.focal_loss_from_logits(pred_pos, target_pos).view(1))
             loss.append(self.focal_loss_from_logits(pred_pos, target_pos).view(1))
-        return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
+        return torch.cat(loss, dim=0) / num_pos  # [batch_size,]
+
 
     def compute_cnt_loss(self, preds, target, mask):
         batch_size = target.shape[0]
@@ -298,6 +309,7 @@ class Loss(nn.Module):
                                                            target = target_pos,
                                                            reduction = 'sum').view(1))
             return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
+
 
     def compute_reg_loss(self, preds, target, mask):
         batch_size = target.shape[0]
@@ -331,7 +343,6 @@ class Loss(nn.Module):
         targets: [n,class_num]
         '''
         preds = preds.sigmoid()
-
         pt = preds * targets + (1.0 - preds) * (1.0 - targets)
         w = alpha * targets + (1.0 - alpha) * (1.0 - targets)
         loss = -w * torch.pow((1.0 - pt), gamma) * pt.log()
@@ -357,7 +368,7 @@ class Loss(nn.Module):
         wh_max = (rb_max + lt_max).clamp(0)
         G_area = wh_max[:, 0] * wh_max[:, 1]  # [n]
 
-        giou = iou - (G_area - union) / G_area.clamp(1e-10)
+        giou = iou - (G_area - union) / G_area.clamp(min=1e-10)
         loss = 1. - giou
         return loss.sum()
 
