@@ -256,7 +256,7 @@ class Loss(nn.Module):
         cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
         reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos).mean()
         total_loss = cls_loss + cnt_loss + reg_loss
-        print(f"total_loss : {total_loss}, cls_loss : {cls_loss}, cnt_loss : {cnt_loss}, reg_loss : {reg_loss}")
+        # print(f"total_loss : {total_loss}, cls_loss : {cls_loss}, cnt_loss : {cnt_loss}, reg_loss : {reg_loss}")
         return cls_loss, cnt_loss, reg_loss, total_loss
 
 

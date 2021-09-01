@@ -5,7 +5,7 @@ from torchinfo import summary
 
 
 
-def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device,depth=4):
+def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
     col_names = ("input_size", "output_size", "num_params", "kernel_size", "mult_adds")
     img = torch.rand(batch, ch, width, hight).to(device)
     summary(model, img.size(), None, None, col_names, depth = depth, verbose= 1)

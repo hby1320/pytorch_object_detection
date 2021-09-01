@@ -8,6 +8,7 @@ from PIL import Image
 import random
 from typing import List
 
+
 def flip(img, boxes):
     img = img.transpose(Image.FLIP_LEFT_RIGHT)
     w = img.width
@@ -52,13 +53,12 @@ class VOCDataset(torch.utils.data.Dataset):
         return len(self.img_ids)
 
     def __getitem__(self,index):
-
         img_id = self.img_ids[index]
         img = Image.open(self._imgpath % img_id)
-
         anno = ET.parse(self._annopath % img_id).getroot()
         boxes = []
         classes = []
+
         for obj in anno.iter("object"):
             difficult = int(obj.find("difficult").text) == 1
             if not self.use_difficult and difficult:
@@ -94,7 +94,7 @@ class VOCDataset(torch.utils.data.Dataset):
         boxes = torch.from_numpy(boxes)
         classes = torch.LongTensor(classes)
 
-        return img,boxes,classes
+        return img, boxes, classes
 
     def preprocess_img_boxes(self,image, boxes, input_ksize):
 
