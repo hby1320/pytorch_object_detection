@@ -81,7 +81,7 @@ if __name__ == '__main__':
     scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
     gen_target = GenTargets(strides=[8,16,32,64,128], limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
-    loss = Loss()
+    criterion = Loss()
 
 
     nb = len(train_dataloder)
@@ -118,7 +118,7 @@ if __name__ == '__main__':
             # with torch.cuda.amp.autocast(enabled = amp_enabled):
             outputs = model(imgs)
             targets = gen_target([outputs, targets, classes])
-            total_loss = loss([outputs, targets])
+            total_loss = criterion([outputs, targets])
             scaler.scale(total_loss[-1].mean()).backward()  # ? lossess ? lossess.mean()?
             scaler.step(optimizer)
             scaler.update()
