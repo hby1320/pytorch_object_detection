@@ -3,16 +3,23 @@ import torch
 
 
 class StdConv(nn.Module):  # TODO activation if add
-    def __init__(self, in_channel: int, out_channel: int, kernel: int, st: int, padding=1, d=1):
+    def __init__(self, in_channel: int, out_channel: int, kernel: int, st: int, padding=1, actmode='relu', d=1):
         super(StdConv, self).__init__()
         self.conv = nn.Conv2d(in_channels=in_channel,
                               out_channels=out_channel,
                               kernel_size=kernel,
                               stride=st,
                               padding=padding,
-                              dilation=d)
+                              dilation=d,
+                              bias = False)
         self.bn = nn.BatchNorm2d(out_channel)
-        self.act = nn.ReLU(inplace=True)
+        self.mode = actmode
+
+        if self.mode == 'swish':
+            self.act = nn.SiLU(inplace = True)
+        else:
+            self.act = nn.ReLU(inplace = True)
+
 
     def forward(self, x1: torch.Tensor) -> torch.Tensor:
         return self.act(self.bn(self.conv(x1)))
