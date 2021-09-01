@@ -17,7 +17,7 @@ from torchvision.transforms import transforms
 import random
 
 EPOCH = 100
-LR_INIT = 2e-3
+LR_INIT = 0.0001 # 2e-3 -> 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 model_name = 'FCOS'
@@ -107,7 +107,9 @@ if __name__ == '__main__':
         #     torch.distributed.barrier()
         model.train()
         pbar = enumerate(train_dataloder)
+        print(f'{"cls_loss":12s} {"cnt_loss":12s} {"reg_loss":12s} {"total_loss":12s} {"progressbar":12s}')
         pbar = tqdm(pbar, total=nb, desc='Batch', leave=False, disable=False if local_rank == 0 else True)
+
         for batch_idx, (imgs, targets, classes) in pbar:
 
             iters = len(train_dataloder) * epoch + batch_idx
@@ -134,7 +136,7 @@ if __name__ == '__main__':
                 # writer.add_scalar(f'loss/training (rank{local_rank})', reg_loss, iters)
                 writer.add_scalar(f'loss/training (rank{local_rank})', total_loss[-1], iters)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
-            s = ('%10.4g' * 4) % (total_loss[0], total_loss[1], total_loss[2], total_loss[3])
+            s = (f'{total_loss[0]:10.4g} {total_loss[1]:10.4g} {total_loss[2]:10.4g} {total_loss[3]:10.4g}')
             pbar.set_description(s)
             scheduler.step()
 
