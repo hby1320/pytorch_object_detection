@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utill.utills import model_info
+from utill.utills import model_info, coords_origin_fcos
 from model.backbone.resnet50 import ResNet50
 import torch.nn.functional as F
 from typing import List
@@ -37,7 +37,6 @@ class FCOS (nn.Module):
             center.append(center_logit)
             reg_logit = self.regression_sub(feature)
             reg.append(self.scale_exp[i](reg_logit))
-
         return cls, center, reg
 
 
@@ -150,16 +149,16 @@ class GenTargets(nn.Module):
         return torch.cat(cls_target, dim=1), torch.cat(center_target, dim=1), torch.cat(reg_target, dim=1)
 
 
-    def coords_origin_fcos(self, feature: torch.Tensor, strides=List[int]):
-        h, w = feature.shape[1:3]
-        shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
-        shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
-
-        shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
-        shift_x = torch.reshape(shift_x, [-1])
-        shift_y = torch.reshape(shift_y, [-1])
-        coords = torch.stack([shift_x, shift_y], -1) + strides // 2
-        return coords
+    # def coords_origin_fcos(self, feature: torch.Tensor, strides=List[int]):
+    #     h, w = feature.shape[1:3]
+    #     shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
+    #     shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
+    #
+    #     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
+    #     shift_x = torch.reshape(shift_x, [-1])
+    #     shift_y = torch.reshape(shift_y, [-1])
+    #     coords = torch.stack([shift_x, shift_y], -1) + strides // 2
+    #     return coords
 
 
     def generate_target(self, lv_out, gt_box, labels,
@@ -171,7 +170,7 @@ class GenTargets(nn.Module):
         m = gt_box.shape[1]
 
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = self.coords_origin_fcos(cls_logit, stride)
+        coords = coords_origin_fcos(cls_logit, stride)
 
         cls_logit = cls_logit.reshape((batch, -1, class_num))
         center_logit = center_logit.permute(0, 2, 3, 1)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch
 from typing import List
 from utills import model_info
-from model.modules.modules import StdConv, DepthWiseConv2d, PointWiseConv
+from model.modules.modules import StdConv, DepthWiseConv2d, PointWiseConv, SEBlock
 
 
 
@@ -29,8 +29,8 @@ class MC_FCOS(nn.Module):
         self.tf1 = StdConv(2048, feature, 1, 1, 1//2, 'swish')
         self.fpn = FPN(feautre=feature)
         self.refine = FeatureRefine(feature=feature)
-        self.head = Detector_head(feature=feature,
-                                  num_class = num_classes)
+        self.head = Detector_head(num_class = num_classes,
+                                  feature=256)
 
         # self.FFM = FeatureFusionModule(feature_lv = [512, 1024, 2048], feature = 256)
 
@@ -56,12 +56,14 @@ class MC_FCOS(nn.Module):
 
 
 class MBConv(nn.Module):  # TODO SE Add
-    def __init__(self, in_feature:int, out_feature:int):
+    def __init__(self, in_feature:int, out_feature:int, r=6):
         super(MBConv, self).__init__()
+        # expanded = expansion_factor * in_feature
         self.conv1 = PointWiseConv(in_channel = in_feature,
                                    out_channel = in_feature // 2)
         self.conv2 = DepthWiseConv2d(in_channel = in_feature // 2,
                                      kernel = 3)
+        self.se = SEBlock(in_feature // 2, r = r)
         self.conv3 = PointWiseConv(in_channel = in_feature // 2,
                                    out_channel = in_feature // 2)
         # self.se =
@@ -69,6 +71,7 @@ class MBConv(nn.Module):  # TODO SE Add
                                    out_channel = in_feature // 2)
         self.conv5 = PointWiseConv(in_channel = in_feature,
                                    out_channel = out_feature)
+
         self.bn = nn.BatchNorm2d(in_feature // 2)
         self.bn2 = nn.BatchNorm2d(out_feature)
         self.act = nn.SiLU(True)  #swich
@@ -76,9 +79,10 @@ class MBConv(nn.Module):  # TODO SE Add
 
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.act(self.bn(self.conv1(x))) ## channel sq
+        x = self.act(self.bn(self.conv1(x))) ## channel sq  # CSP  c/2
         x1 = x
-        x = self.act(self.bn(self.conv2(x)))  # [1, 128, 16, 16])
+        x = self.act(self.bn(self.conv2(x)))  # [1, 128, 16, 16]) ## Dw
+        x = self.se(x)
         x = self.act(self.bn(self.conv3(x)))
         x1 = self.act(self.bn(self.conv4(x1)))
         x = torch.cat([x, x1], dim = 1)
@@ -185,35 +189,37 @@ class FeatureRefine(nn.Module):
 
 
 class Detector_head(nn.Module):
-    def __init__(self,feature, num_class):
+    def __init__(self,num_class:int,feature =256 ):
         super(Detector_head, self).__init__()
         self.conv1 = nn.Conv2d(in_channels = feature, out_channels = feature,
-                               kernel_size = 3,padding = 3//1, padding_mode = 'zeros',
+                               kernel_size = 3,padding = 3//2, padding_mode = 'zeros',
                                bias = False)
         self.conv2 = nn.Conv2d(in_channels = feature, out_channels = feature,
-                               kernel_size = 3, padding = 3//1, padding_mode = 'zeros',
+                               kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                                bias = False)
         self.conv3 = nn.Conv2d(in_channels = feature, out_channels = feature,
-                               kernel_size = 3, padding = 3//1, padding_mode = 'zeros',
+                               kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                                bias = False)
         self.conv4 = nn.Conv2d(in_channels = feature, out_channels = feature,
-                               kernel_size = 3, padding = 3//1, padding_mode = 'zeros',
+                               kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                                bias = False)
         self.cls = nn.Conv2d(in_channels = feature, out_channels = num_class,
-                             kernel_size = 3, padding_mode = 'zeros',
+                             kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                              bias = False)
         self.cnt = nn.Conv2d(in_channels = feature, out_channels = 1,
-                             kernel_size = 3, padding_mode = 'zeros',
+                             kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                              bias = False)
         self.reg = nn.Conv2d(in_channels = feature, out_channels = 4,
-                             kernel_size = 3, padding_mode = 'zeros',
+                             kernel_size = 3, padding = 3//2, padding_mode = 'zeros',
                              bias = False)
+        self.bn = nn.BatchNorm2d(feature)
+        self.silu = nn.SiLU(True)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
+        x = self.silu(self.bn(self.conv1(x)))
+        x = self.silu(self.bn(self.conv2(x)))
+        x = self.silu(self.bn(self.conv3(x)))
+        x = self.silu(self.bn(self.conv4(x)))
         cls = self.cls(x)
         cnt = self.cnt(x)
         reg = self.reg(x)
@@ -224,5 +230,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = MC_FCOS([512, 1024, 2048], 20, 256)
     model_info(model, 1, 3, 512, 512, device)
+    z = torch.rand(1,3,512,512).to(device)
+
+    a,b,c = model(z)
 
 

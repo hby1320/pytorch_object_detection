@@ -72,3 +72,19 @@ class SeparableConv2d(nn.Module):
 
     def forward(self, x1: torch.Tensor) -> torch.Tensor:
         return self.point_wise(self.depth_wise(x1))
+
+
+class SEBlock(nn.Module):
+    """Squeeze-and-excitation block"""
+    def __init__(self, n_in, r=24):
+        super().__init__()
+        self.squeeze = nn.AdaptiveAvgPool2d(1)
+        self.excitation = nn.Sequential(nn.Conv2d(n_in, n_in // r, kernel_size = 1),
+                                        nn.SiLU(),
+                                        nn.Conv2d(n_in // r, n_in, kernel_size = 1),
+                                        nn.Sigmoid())
+
+    def forward(self, x):
+        y = self.squeeze(x)
+        y = self.excitation(y)
+        return x * y
