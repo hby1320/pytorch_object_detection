@@ -2,7 +2,7 @@ from model.backbone.resnet50 import ResNet50
 import torch.nn as nn
 import torch
 from typing import List
-from utills import model_info
+from utill.utills import model_info
 from model.modules.modules import StdConv, DepthWiseConv2d, PointWiseConv, SEBlock
 
 

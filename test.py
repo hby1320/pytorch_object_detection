@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.distributed
 import torch.utils.data
 from tqdm import tqdm
-import utills
+
 from model.modules.head import FCOSHead, ClipBoxes
 import numpy as np
 from model.od.Fcos import  FCOS

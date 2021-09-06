@@ -8,23 +8,32 @@ import torch
 # from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS, GenTargets, Loss
-from utill.utills import model_info,PolyLR
-from torch.optim import adam, adamw, SGD, Optimizer, Adam
-import torch.backends.cudnn as cudnn
+from model.od.Mc_Fcos import MC_FCOS
+from utill.utills import model_info, PolyLR
+from torch.optim import SGD, Adam
 import numpy as np
 from torchvision.transforms import transforms
 import random
 from test import evaluate
 
-EPOCH = 50
-batch_size = 16
+EPOCH = 10
+batch_size = 14
 # LR_INIT = 0.0001  # amp not using
-LR_INIT = 0.00001
+LR_INIT = 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
-model_name = 'FCOS'
+
+# mode = 'FCOS'
+mode = 'proposed'
+if mode == 'FCOS':
+    model_name = 'FCOS'
+else:
+    model_name = 'Test'
+opt = 'Adam'
 amp_enabled = True
 ddp_enabled = False
+
+
 if __name__ == '__main__':
 
     # DDP option
@@ -73,22 +82,38 @@ if __name__ == '__main__':
         sampler = False
         train_dataloder = DataLoader(voc_train, batch_size = batch_size, shuffle = True, num_workers = 4,
                                      collate_fn = voc_07_train.collate_fn)
-        valid_dataloder = DataLoader(voc_07_trainval, batch_size = batch_size, num_workers = 4,
+        valid_dataloder = DataLoader(voc_07_trainval, batch_size = 1, num_workers = 4,
                                      collate_fn = voc_07_trainval.collate_fn)
+    if mode == 'FCOS':
+        model = FCOS([2048, 1024, 512], 20, 256).to(device)
+        gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
+                                limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
+    elif mode =='proposed':
+        model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
+        gen_target = GenTargets(strides=[8, 16, 32, 64],
+                                limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512]])
 
-    model = FCOS([2048, 1024, 512], 20, 256).to(device)
     if ddp_enabled:
         model = torch.nn.parallel.DistributedDataParallel(model)
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     print(f'Activated model: {model_name} (rank{local_rank})')
-    # optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
-    optimizer = Adam(model.parameters(), lr=LR_INIT)
+
+    if opt == 'SGD':
+        optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
+    elif opt == 'Adam':
+        optimizer = Adam(model.parameters(), lr=LR_INIT)
+    # scheduler = LambdaLR(optimizer=optimizer,
+    #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
+    #                      last_epoch=-1,
+    #                      verbose=False)
     scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
-    gen_target = GenTargets(strides=[8,16,32,64,128],
-                            limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
-    criterion = Loss()
+    # gen_target = GenTargets(strides=[8,16,32,64,128],
+    #                         limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
+    # gen_target = GenTargets(strides=[8,16,32,64],
+    #                         limit_range=[[-1,64],[64,128],[128,256],[256,999999]])
+    criterion = Loss(mode='iou')  # 'iou'
 
 
     nb = len(train_dataloder)
@@ -149,8 +174,8 @@ if __name__ == '__main__':
             s = (f'{mem:10s} {cls_loss.item():10.4g} {cnt_loss.item():10.4g} {reg_loss.item():10.4g} {total_loss.item():10.4g}')
             pbar.set_description(s)
             scheduler.step()
-        if EPOCH % 10 == 0 :
-            evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
+        # if epoch % 5 == 0:
+        evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
         ##  epoch 마다 저장
         if epoch > EPOCH - 10:

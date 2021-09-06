@@ -170,7 +170,7 @@ class GenTargets(nn.Module):
         m = gt_box.shape[1]
 
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = coords_origin_fcos(feature = cls_logit, strides = stride)
+        coords = coords_origin_fcos(feature = cls_logit, strides = stride).cuda()
         cls_logit = cls_logit.reshape((batch, -1, class_num))
         center_logit = center_logit.permute(0, 2, 3, 1)
         center_logit = center_logit.reshape((batch, -1, 1))
@@ -186,14 +186,15 @@ class GenTargets(nn.Module):
         right_offset = gt_box[...,2][:, None, :] - x[None, :, None]
         bottom_offset = gt_box[...,3][:, None, :] - y[None, :, None]
         offset = torch.stack([left_offset, top_offset, right_offset, bottom_offset], dim= -1)
-
         area = (offset[...,0]+offset[...,2])*(offset[...,1]+offset[...,3])
 
         offset_min = torch.min(offset, dim=-1)[0]
         offset_max = torch.max(offset, dim=-1)[0]
 
         mask_gt = offset_min > 0
+
         mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
+        # print(f' {lim_range} {torch.count_nonzero(mask_lv)}')
         ratio = stride * sample_radio_ratio
         gt_center_x = (gt_box[..., 0] + gt_box[..., 2]) / 2
         gt_center_y = (gt_box[..., 1] + gt_box[..., 3]) / 2
@@ -205,8 +206,8 @@ class GenTargets(nn.Module):
         gt_off_max = torch.max(gt_offset, dim = -1)[0]
         mask_center = gt_off_max < ratio
 
-        mask_pos = mask_gt & mask_lv & mask_center
-
+        mask_pos = mask_gt & mask_lv & mask_center  #
+        # print(f'  {torch.count_nonzero(mask_pos)}')
         area[~mask_pos] = 99999999
         area_min_index = torch.min(area, dim = -1)[1]
         reg_target = offset[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim=-1),1)]
@@ -240,9 +241,9 @@ class GenTargets(nn.Module):
 
 
 class Loss(nn.Module):
-    def __init__(self):
+    def __init__(self, mode='giou'):
         super(Loss, self).__init__()
-
+        self.mode = mode
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         pred, target = input
@@ -252,7 +253,7 @@ class Loss(nn.Module):
 
         cls_loss = torch.mean(self.compute_cls_loss(cls_logit, cls_target, mask_pos))  #평균 이유 : 배치 당 로스
         cnt_loss = torch.mean(self.compute_cnt_loss(cen_logit, cen_target, mask_pos))
-        reg_loss = torch.mean(self.compute_reg_loss(reg_logit, reg_target, mask_pos))
+        reg_loss = torch.mean(self.compute_reg_loss(reg_logit, reg_target, mask_pos, self.mode))
         total_loss = cls_loss + cnt_loss + reg_loss
         # print(f"total_loss : {total_loss}, cls_loss : {cls_loss}, cnt_loss : {cnt_loss}, reg_loss : {reg_loss}")
         return cls_loss, cnt_loss, reg_loss, total_loss
@@ -309,7 +310,7 @@ class Loss(nn.Module):
             return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
 
 
-    def compute_reg_loss(self, preds, target, mask):
+    def compute_reg_loss(self, preds, target, mask, mode='iou'):
         batch_size = target.shape[0]
         c = target.shape[-1]
         preds_reshape = []
@@ -326,13 +327,31 @@ class Loss(nn.Module):
             pred_pos = preds[batch_index][mask[batch_index]]  # [num_pos_b,4]
             target_pos = target[batch_index][mask[batch_index]]  # [num_pos_b,4]
             assert len(pred_pos.shape) == 2
-            # if mode == 'iou':
-            #     loss.append(self.iou_loss(pred_pos, target_pos).view(1))
-            # elif mode == 'giou':
-            loss.append(self.giou_loss(pred_pos, target_pos).view(1))
-            # else:
-                # raise NotImplementedError("reg loss only implemented ['iou','giou']")
+            if mode == 'iou':
+                loss.append(self.iou_loss(pred_pos, target_pos).view(1))
+            elif mode == 'giou':
+                loss.append(self.giou_loss(pred_pos, target_pos).view(1))
+            else:
+                raise NotImplementedError("reg loss only implemented ['iou','giou']")
         return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
+
+
+    def iou_loss(self, preds, targets):
+        '''
+        Args:
+        preds: [n,4] ltrb
+        targets: [n,4]
+        '''
+        lt = torch.min(preds[:, :2], targets[:, :2])
+        rb = torch.min(preds[:, 2:], targets[:, 2:])
+        wh = (rb + lt).clamp(min=0)
+        overlap = wh[:, 0] * wh[:, 1]  # [n]
+        area1 = (preds[:, 2] + preds[:, 0]) * (preds[:, 3] + preds[:, 1])
+        area2 = (targets[:, 2] + targets[:, 0]) * (targets[:, 3] + targets[:, 1])
+        iou = overlap / (area1 + area2 - overlap)
+        loss = -iou.clamp(min=1e-6).log()
+        return loss.sum()
+
 
     def focal_loss_from_logits(self, preds, targets, gamma=2.0, alpha=0.25):
         '''
