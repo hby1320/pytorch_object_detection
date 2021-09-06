@@ -107,18 +107,18 @@ class VOCDataset(torch.utils.data.Dataset):
         min_side, max_side = input_ksize
         h,  w, _ = image.shape
 
-        smallest_side = min(w,h)
-        largest_side=max(w,h)
+        smallest_side = min(w, h)
+        largest_side=max(w, h)
         scale=min_side/smallest_side
         if largest_side*scale>max_side:
             scale=max_side/largest_side
         nw, nh  = int(scale * w), int(scale * h)
         image_resized = cv2.resize(image, (nw, nh))
 
-        pad_w=32-nw%32
-        pad_h=32-nh%32
+        pad_w = 32 - nw % 32
+        pad_h = 32 - nh % 32
 
-        image_paded = np.zeros(shape=[nh+pad_h, nw+pad_w, 3],dtype=np.uint8)
+        image_paded = np.zeros(shape= [nh+pad_h, nw+pad_w, 3], dtype=np.uint8)
         image_paded[:nh, :nw, :] = image_resized
 
         if boxes is None:
@@ -157,10 +157,10 @@ class VOCDataset(torch.utils.data.Dataset):
 
 
         batch_boxes=torch.stack(pad_boxes_list)
-        batch_classes=torch.stack(pad_classes_list)
-        batch_imgs=torch.stack(pad_imgs_list)
+        batch_classes = torch.stack(pad_classes_list)
+        batch_imgs = torch.stack(pad_imgs_list)
 
-        return batch_imgs,batch_boxes,batch_classes
+        return batch_imgs, batch_boxes, batch_classes
 
 
 if __name__=="__main__":

@@ -54,6 +54,7 @@ def shift_xy(shape, stride, anchor):
 
 
 def coords_origin_fcos(feature: torch.Tensor, strides=List[int]):  # 원본 FCOS의 Location과 동일
+
     h, w = feature.shape[1:3]  # b,h,w,c 중 h,c
     shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
     shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)

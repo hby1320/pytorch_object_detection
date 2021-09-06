@@ -240,11 +240,13 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from PIL import Image
 
-    transform = transforms.Compose([transforms.ToTensor(),
-                                    transforms.Resize(512)])
+    # transform = transforms.Compose([transforms.ToTensor(),
+    #                                 transforms.Resize(512)])
     # transform_train = torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
-    a = PascalVoc(root = "../data/voc", year = "2007", image_set = "train", download = False, )
-    # b = PascalVoc(root = "../data/voc", year = "2012", image_set = "train", download = False)
+    a = PascalVoc(root = "../data/voc", year = "2007", image_set = "train", download = True, )
+    b = PascalVoc(root = "../data/voc", year = "2012", image_set = "train", download = True)
+    c = PascalVoc(root = "../data/voc", year = "2007", image_set = "test", download = True)
+
     # c = ConcatDataset([a, b])
     # test_data = DataLoader(a, batch_size = 1, shuffle = True, num_workers = 4)
     # #
@@ -273,34 +275,34 @@ if __name__ == '__main__':
         # print(f'{cls= }')  # cls= [6.0]
 
 
-    def visualize_agm(path='./001', ):
-        amg = ['brightness', 'contrast', 'saturation', 'RandomAdjustSharpness', 'RandomCrop', 'RandomHorizontalFlip']
-        acept = []
-        for i in range(len(amg)):
-            print(f'agment List {i+1}: {amg[i]}')
-            acept = acept.append(input(f'input 1 else 0'))
-
-        img = Image.open(f'{path}.png')
-        tf = transforms.ToTensor()
-        img = tf(img)
-
-        amgent = []
-        if acept[0] ==1:
-            amgent.append(transforms.ColorJitter((5,5), 0, 0, 0))
-        elif acept[1]==1:
-            amgent.append(transforms.ColorJitter(0, (5,5), 0, 0))
-        elif acept[2]==1:
-            amgent.append(transforms.ColorJitter(0, 0, (5,5), 0))
-        elif acept[3]==1:
-            amgent.append(transforms.RandomAdjustSharpness(1))
-        elif acept[4]==1:
-            amgent.append(transforms.RandomCrop((512,1024)))
-        elif acept[5]==1:
-            amgent.append(transforms.RandomHorizontalFlip(1))
-        img_list = []
-        print(f'{amgent}')
-
-    visualize_agm()
+    # def visualize_agm(path='./001', ):
+    #     amg = ['brightness', 'contrast', 'saturation', 'RandomAdjustSharpness', 'RandomCrop', 'RandomHorizontalFlip']
+    #     acept = []
+    #     for i in range(len(amg)):
+    #         print(f'agment List {i+1}: {amg[i]}')
+    #         acept = acept.append(input(f'input 1 else 0'))
+    #
+    #     img = Image.open(f'{path}.png')
+    #     tf = transforms.ToTensor()
+    #     img = tf(img)
+    #
+    #     amgent = []
+    #     if acept[0] ==1:
+    #         amgent.append(transforms.ColorJitter((5,5), 0, 0, 0))
+    #     elif acept[1]==1:
+    #         amgent.append(transforms.ColorJitter(0, (5,5), 0, 0))
+    #     elif acept[2]==1:
+    #         amgent.append(transforms.ColorJitter(0, 0, (5,5), 0))
+    #     elif acept[3]==1:
+    #         amgent.append(transforms.RandomAdjustSharpness(1))
+    #     elif acept[4]==1:
+    #         amgent.append(transforms.RandomCrop((512,1024)))
+    #     elif acept[5]==1:
+    #         amgent.append(transforms.RandomHorizontalFlip(1))
+    #     img_list = []
+    #     print(f'{amgent}')
+    #
+    # visualize_agm()
     #
     # img = Image.open(f'./001.png')
     #

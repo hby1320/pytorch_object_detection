@@ -14,14 +14,16 @@ import torch.backends.cudnn as cudnn
 import numpy as np
 from torchvision.transforms import transforms
 import random
+from test import evaluate
 
-EPOCH = 100
-batch_size = 2
-LR_INIT = 0.0001 # 2e-3 -> 0.0001
+EPOCH = 50
+batch_size = 16
+# LR_INIT = 0.0001  # amp not using
+LR_INIT = 0.00001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 model_name = 'FCOS'
-amp_enabled = False
+amp_enabled = True
 ddp_enabled = False
 if __name__ == '__main__':
 
@@ -93,7 +95,6 @@ if __name__ == '__main__':
     start_epoch = 0
     prev_mAP = 0.0
     prev_val_loss = 2 ** 32 - 1
-    ##  TODO resume Train 추가
 
     if local_rank == 0:
         writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', model_name))
@@ -146,10 +147,11 @@ if __name__ == '__main__':
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)
             # total_losses = (total_loss[-1] * batch_idx + total_loss) / (batch_idx + 1)
             s = (f'{mem:10s} {cls_loss.item():10.4g} {cnt_loss.item():10.4g} {reg_loss.item():10.4g} {total_loss.item():10.4g}')
-
             pbar.set_description(s)
             scheduler.step()
+        if EPOCH % 10 == 0 :
+            evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
         ##  epoch 마다 저장
-        # torch.save(model.state_dict(), f"./checkpoint/model_{epoch + 1}.pth")
-
+        if epoch > EPOCH - 10:
+            torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
