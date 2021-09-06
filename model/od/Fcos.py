@@ -170,8 +170,7 @@ class GenTargets(nn.Module):
         m = gt_box.shape[1]
 
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = coords_origin_fcos(cls_logit, stride)
-
+        coords = coords_origin_fcos(feature = cls_logit, strides = stride)
         cls_logit = cls_logit.reshape((batch, -1, class_num))
         center_logit = center_logit.permute(0, 2, 3, 1)
         center_logit = center_logit.reshape((batch, -1, 1))
@@ -251,9 +250,9 @@ class Loss(nn.Module):
         cls_target, cen_target, reg_target = target
         mask_pos = (cen_target > -1).squeeze(dim=-1)
 
-        cls_loss = torch.mean(self.compute_cls_loss(cls_logit, cls_target, mask_pos)) # []
-        cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
-        reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos).mean()
+        cls_loss = torch.mean(self.compute_cls_loss(cls_logit, cls_target, mask_pos))  #평균 이유 : 배치 당 로스
+        cnt_loss = torch.mean(self.compute_cnt_loss(cen_logit, cen_target, mask_pos))
+        reg_loss = torch.mean(self.compute_reg_loss(reg_logit, reg_target, mask_pos))
         total_loss = cls_loss + cnt_loss + reg_loss
         # print(f"total_loss : {total_loss}, cls_loss : {cls_loss}, cnt_loss : {cnt_loss}, reg_loss : {reg_loss}")
         return cls_loss, cnt_loss, reg_loss, total_loss

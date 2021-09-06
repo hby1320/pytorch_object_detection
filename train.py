@@ -24,19 +24,11 @@ model_name = 'FCOS'
 amp_enabled = False
 ddp_enabled = False
 if __name__ == '__main__':
-    # seed FiXed
-    torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
-    torch.cuda.manual_seed_all(0)
-    np.random.seed(0)
-    cudnn.benchmark = False
-    cudnn.deterministic = True
-    random.seed(0)
 
     # DDP option
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        torch.distributed.init_process_group(backend= 'nccl', init_method='env://')
         local_rank = torch.distributed.get_rank()
         world_size = torch.distributed.get_world_size()
         os.system('clear')
@@ -68,6 +60,7 @@ if __name__ == '__main__':
     voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, )
     voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+
     if ddp_enabled:
         sampler = torch.utils.data.DistributedSampler(voc_train)
         shuffle = False
@@ -91,7 +84,8 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=LR_INIT)
     scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
-    gen_target = GenTargets(strides=[8,16,32,64,128], limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
+    gen_target = GenTargets(strides=[8,16,32,64,128],
+                            limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
     criterion = Loss()
 
 
@@ -128,11 +122,11 @@ if __name__ == '__main__':
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
             optimizer.zero_grad()
-            # with torch.cuda.amp.autocast(enabled = amp_enabled):
-            outputs = model(imgs)
-            targets = gen_target([outputs, targets, classes])
-            total_loss = criterion([outputs, targets])
-            scaler.scale(total_loss[-1].mean()).backward()  # ? lossess ? lossess.mean()?
+            with torch.cuda.amp.autocast(enabled = amp_enabled):
+                outputs = model(imgs)
+                targets = gen_target([outputs, targets, classes])
+                cls_loss, cnt_loss, reg_loss, total_loss = criterion([outputs, targets])
+            scaler.scale(total_loss).backward()
             scaler.step(optimizer)
             scaler.update()
 
@@ -144,19 +138,14 @@ if __name__ == '__main__':
                         writer.add_scalar(f'loss/training (rank{i})', rank_loss.item(), iters)
                     writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             else:
-                # writer.add_scalar(f'loss/training (rank{local_rank})', cls_loss, iters)
-                # writer.add_scalar(f'loss/training (rank{local_rank})', cnt_loss, iters)
-                # writer.add_scalar(f'loss/training (rank{local_rank})', reg_loss, iters)
-                writer.add_scalar(f'loss/training (rank{local_rank})', total_loss[-1], iters)
+                writer.add_scalar(f'loss/training (rank{local_rank})', total_loss, iters)
+                writer.add_scalar(f'loss/training/batch', cls_loss, epoch)
+                writer.add_scalar(f'loss/training/batch', cnt_loss, epoch)
+                writer.add_scalar(f'loss/training/batch', reg_loss, epoch)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)
             # total_losses = (total_loss[-1] * batch_idx + total_loss) / (batch_idx + 1)
-            s = (
-                f'{mem:10s} {total_loss[0]:10.4g} {total_loss[1]:10.4g} {total_loss[2]:10.4g} {total_loss[3]:10.4g}')
-            # s = (
-                # f'{mem:10s} {total_loss[0]:10.4g} {total_loss[1]:10.4g} {total_loss[2]:10.4g} {total_loss[3] / (batch_idx + 1):10.4g}')
-            # s = (
-            #     f'{mem:10s} {total_losses:10.4g} ')
+            s = (f'{mem:10s} {cls_loss.item():10.4g} {cnt_loss.item():10.4g} {reg_loss.item():10.4g} {total_loss.item():10.4g}')
 
             pbar.set_description(s)
             scheduler.step()

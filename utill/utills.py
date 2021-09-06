@@ -53,15 +53,15 @@ def shift_xy(shape, stride, anchor):
     return all_anchor
 
 
-def coords_origin_fcos(self, feature: torch.Tensor, strides=List[int]):
-    h, w = feature.shape[1:3]
+def coords_origin_fcos(feature: torch.Tensor, strides=List[int]):  # 원본 FCOS의 Location과 동일
+    h, w = feature.shape[1:3]  # b,h,w,c 중 h,c
     shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
     shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
 
     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
     shift_x = torch.reshape(shift_x, [-1])
     shift_y = torch.reshape(shift_y, [-1])
-    coords = torch.stack([shift_x, shift_y], -1) + strides // 2
+    coords = torch.stack([shift_x, shift_y], -1) + strides // 2  # 원본의 경우 1 이부분 차이있는지 확인필요
     return coords
 
 
