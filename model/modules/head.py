@@ -22,8 +22,8 @@ class FCOSHead(nn.Module):
         cen_logits, _ = self._reshape_cat_out(x[1], self.strides)
         reg_preds, _ = self._reshape_cat_out(x[2], self.strides)
 
-        cls_preds = F.sigmoid(cls_logits)  # 0~1 Nomalize
-        cen_preds = F.sigmoid(cen_logits)  # 0~1 Nomalize
+        cls_preds = torch.sigmoid(cls_logits)  # 0~1 Nomalize
+        cen_preds = torch.sigmoid(cen_logits)  # 0~1 Nomalize
 
         coords = coords.cuda() if torch.cuda.is_available() else coords
 

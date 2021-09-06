@@ -209,7 +209,7 @@ if __name__ == '__main__':
     from dataset.voc import VOCDataset
     from torch.utils.data import DataLoader
 
-    batch_size = 1
+    batch_size = 16
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
