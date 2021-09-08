@@ -11,25 +11,26 @@ from model.od.Fcos import FCOS, GenTargets, Loss
 from model.od.Mc_Fcos import MC_FCOS
 from utill.utills import model_info, PolyLR
 from torch.optim import SGD, Adam
+from torch.optim.lr_scheduler import LambdaLR
 import numpy as np
 from torchvision.transforms import transforms
 import random
 from test import evaluate
 
-EPOCH = 10
-batch_size = 14
+EPOCH = 50
+batch_size = 12
 # LR_INIT = 0.0001  # amp not using
-LR_INIT = 0.0001
+LR_INIT = 2e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
-# mode = 'FCOS'
-mode = 'proposed'
+mode = 'FCOS'
+# mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS'
 else:
-    model_name = 'Test'
-opt = 'Adam'
+    model_name = 'proposed'
+opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
 
@@ -103,11 +104,11 @@ if __name__ == '__main__':
         optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
     elif opt == 'Adam':
         optimizer = Adam(model.parameters(), lr=LR_INIT)
-    # scheduler = LambdaLR(optimizer=optimizer,
-    #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
-    #                      last_epoch=-1,
-    #                      verbose=False)
-    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    scheduler = LambdaLR(optimizer=optimizer,
+                         lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
+                         last_epoch=-1,
+                         verbose=False)
+    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
     # gen_target = GenTargets(strides=[8,16,32,64,128],
     #                         limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
@@ -142,7 +143,7 @@ if __name__ == '__main__':
         # print(f'{"cls_loss":12s} {"cnt_loss":12s} {"reg_loss":12s} {"total_loss":12s} {"progressbar":12s}')
 
         print(f'{"Gpu_mem":10s} {"cls":>10s} {"cnt":>10s} {"reg":>10s} {"total":>10s} ')
-        pbar = tqdm(pbar, total = nb,desc = 'Batch', leave = False, disable = False if local_rank == 0 else True)
+        pbar = tqdm(pbar, total = nb,desc = 'Batch', leave = True, disable = False if local_rank == 0 else True)
         for batch_idx, (imgs, targets, classes) in pbar:
 
             iters = len(train_dataloder) * epoch + batch_idx
@@ -165,9 +166,9 @@ if __name__ == '__main__':
                     writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             else:
                 writer.add_scalar(f'loss/training (rank{local_rank})', total_loss, iters)
-                writer.add_scalar(f'loss/training/batch', cls_loss, epoch)
-                writer.add_scalar(f'loss/training/batch', cnt_loss, epoch)
-                writer.add_scalar(f'loss/training/batch', reg_loss, epoch)
+                writer.add_scalar(f'loss/training/batch cls_loss', cls_loss, epoch)
+                writer.add_scalar(f'loss/training/batch cnt_loss', cnt_loss, epoch)
+                writer.add_scalar(f'loss/training/batch reg_loss', reg_loss, epoch)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)
             # total_losses = (total_loss[-1] * batch_idx + total_loss) / (batch_idx + 1)
@@ -175,7 +176,7 @@ if __name__ == '__main__':
             pbar.set_description(s)
             scheduler.step()
         # if epoch % 5 == 0:
-        evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
+        # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
         ##  epoch 마다 저장
         if epoch > EPOCH - 10:

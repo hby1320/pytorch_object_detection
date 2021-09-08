@@ -3,7 +3,7 @@
 /data/coco
 # Data file
 *.jpg
-
+*.pth
 /runs
 # Byte-compiled / optimized / DLL files
 __pycache__/

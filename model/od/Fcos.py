@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from utill.utills import model_info, coords_origin_fcos
@@ -21,7 +22,7 @@ class FCOS (nn.Module):
         super(FCOS, self).__init__()
         self.backbone = ResNet50(3)
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
-        self.classification_sub = ClassificationSub(feature, num_class)
+        self.classification_sub = ClassificationSub(feature, num_class, 0.01)
         self.regression_sub = RegressionSub(feature)
         self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
 
@@ -33,9 +34,9 @@ class FCOS (nn.Module):
         center = []
         for i, feature in enumerate(x):
             cls_logit, center_logit = self.classification_sub(feature)
+            reg_logit = self.regression_sub(feature)
             cls.append(cls_logit)
             center.append(center_logit)
-            reg_logit = self.regression_sub(feature)
             reg.append(self.scale_exp[i](reg_logit))
         return cls, center, reg
 
@@ -53,12 +54,22 @@ class FeaturePyramidNetwork(nn.Module):
         self.P3_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.P6_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, stride = 2)
         self.P7_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, stride = 2)
+        self.act = nn.ReLU(True)
+        self.apply(self.init_conv_kaiming)
+
+    def init_conv_kaiming(self, module):
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_uniform(module.weight, a=1)
+
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         c3, c4, c5 = x
         p5 = self.P5(c5)
         p4_c = self.P4(c4)
         p3_c = self.P3(c3)
+
         p4 = self.P5_Up(p5)
         p4 = torch.add(p4, p4_c)
 
@@ -69,13 +80,14 @@ class FeaturePyramidNetwork(nn.Module):
         p4 = self.P4_c1(p4)
         p5 = self.P5_c1(p5)
         p6 = self.P6_c1(p5)
-        p7 = self.P7_c1(p6)
+        p7 = self.P7_c1(self.act(p6))
         return [p3, p4, p5, p6, p7]
 
 
 class ClassificationSub(nn.Module):
-    def __init__(self, feature, num_class):
+    def __init__(self, feature, num_class, prior):
         super(ClassificationSub, self).__init__()
+        self.prior = prior
         self.cls_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.cls_c2 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.cls_c3 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
@@ -84,6 +96,8 @@ class ClassificationSub(nn.Module):
         self.center = nn.Conv2d(feature, 1, kernel_size = 3, padding = 1)
         self.gn = nn.GroupNorm(32, feature)
         self.relu = nn.ReLU(inplace = True)
+        self.apply(init_conv_rand_nomal)
+        nn.init.constant_(self.cls.bias, -np.log((1-self.prior)/self.prior))
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         x = self.relu(self.gn(self.cls_c1(x)))
@@ -105,6 +119,7 @@ class RegressionSub(nn.Module):
         self.reg = nn.Conv2d(feature, 4, kernel_size = 3, padding = 1)
         self.gn = nn.GroupNorm(32, feature)
         self.relu = nn.ReLU(inplace = True)
+        self.apply(init_conv_rand_nomal)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.relu(self.gn(self.reg_c1(x)))
@@ -115,7 +130,6 @@ class RegressionSub(nn.Module):
         return x
 
 
-
 class ScaleExp(nn.Module):
     def __init__(self,init_value=1.0):
         super(ScaleExp,self).__init__()
@@ -123,6 +137,14 @@ class ScaleExp(nn.Module):
 
     def forward(self,x):
         return torch.exp(x * self.scale)
+
+
+def init_conv_rand_nomal(module, std: int = 0.01):
+    if isinstance(module, nn.Conv2d):
+        nn.init.normal_(module.weight, std=std)
+
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
 
 
 class GenTargets(nn.Module):
