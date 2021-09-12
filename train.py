@@ -108,7 +108,7 @@ if __name__ == '__main__':
                          lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
                          last_epoch=-1,
                          verbose=False)
-    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    # scheduler = f(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
     # gen_target = GenTargets(strides=[8,16,32,64,128],
     #                         limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])

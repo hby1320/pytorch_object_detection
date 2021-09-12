@@ -32,7 +32,8 @@ class DepthWiseConv2d(nn.Conv2d):
                          kernel_size=kernel,
                          stride=st,
                          padding=kernel//2,
-                         groups=in_channel
+                         groups=in_channel,
+                         bias=False
                          )
 
 
@@ -41,7 +42,9 @@ class PointWiseConv(nn.Conv2d):
         super().__init__(in_channels=in_channel,
                          out_channels=out_channel,
                          kernel_size=kernel,
-                         stride=st
+                         padding = kernel//2,
+                         stride=st,
+                         bias = False
                          )
 
 
@@ -51,7 +54,9 @@ class DownConv(nn.Conv2d):
                          out_channels=out_channel,
                          kernel_size=kernel,
                          stride=st,
-                         padding=st//2)
+                         padding=kernel//2,
+                         bias = False
+                         )
 
 
 class SeparableConv2d(nn.Module):
