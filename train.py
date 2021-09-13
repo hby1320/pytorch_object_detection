@@ -110,10 +110,6 @@ if __name__ == '__main__':
                          verbose=False)
     # scheduler = f(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
-    # gen_target = GenTargets(strides=[8,16,32,64,128],
-    #                         limit_range=[[-1,64],[64,128],[128,256],[256,512],[512,999999]])
-    # gen_target = GenTargets(strides=[8,16,32,64],
-    #                         limit_range=[[-1,64],[64,128],[128,256],[256,999999]])
     criterion = Loss(mode='iou')  # 'iou'
 
 
@@ -121,6 +117,7 @@ if __name__ == '__main__':
     start_epoch = 0
     prev_mAP = 0.0
     prev_val_loss = 2 ** 32 - 1
+    best_loss = 0
 
     if local_rank == 0:
         writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', model_name))
@@ -133,15 +130,13 @@ if __name__ == '__main__':
         # if torch.utils.train_interupter.train_interupter():
         #     print('Train interrupt occurs.')
         #     break
-        #
-        # if ddp_enabled:
-        #     train_dataloder.sampler.set_epoch(epoch)
-        #     torch.distributed.barrier()
-        model.train()
-        pbar = enumerate(train_dataloder)
-        # print(('\n' + '%10s' * 8) % ('Epoch', 'Gpu_mem', 'CIoU', 'Obj', 'Cls', 'Total', 'Targets', 'Img_size'))
-        # print(f'{"cls_loss":12s} {"cnt_loss":12s} {"reg_loss":12s} {"total_loss":12s} {"progressbar":12s}')
 
+        if ddp_enabled:
+            train_dataloder.sampler.set_epoch(epoch)
+            torch.distributed.barrier()
+        model.train()
+
+        pbar = enumerate(train_dataloder)
         print(f'{"Gpu_mem":10s} {"cls":>10s} {"cnt":>10s} {"reg":>10s} {"total":>10s} ')
         pbar = tqdm(pbar, total = nb,desc = 'Batch', leave = True, disable = False if local_rank == 0 else True)
         for batch_idx, (imgs, targets, classes) in pbar:
@@ -179,5 +174,10 @@ if __name__ == '__main__':
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
         ##  epoch 마다 저장
-        if epoch > EPOCH - 10:
-            torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
+        if total_loss > best_loss:
+            torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
+            best_loss = total_loss
+    if writer is not None:
+        writer.close()
+    if ddp_enabled:
+        torch.distributed.destroy_process_group()
