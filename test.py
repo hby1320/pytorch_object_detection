@@ -219,5 +219,5 @@ if __name__ == '__main__':
 
     model = FCOS([2048, 1024, 512], 20, 256).to(device)
     # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
-    model.load_state_dict(torch.load('./checkpoint/FCOS_512_50_50.pth'))
+    model.load_state_dict(torch.load('./checkpoint/FCOS_512_ag_best_loss.pth'))
     evaluate(model, valid_dataloder, True, False, device, voc_07_trainval)

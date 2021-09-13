@@ -16,6 +16,7 @@ import numpy as np
 from torchvision.transforms import transforms
 import random
 from test import evaluate
+from data.augment import Transforms
 
 EPOCH = 50
 batch_size = 14
@@ -27,13 +28,13 @@ WEIGHTDECAY = 0.0001
 mode = 'FCOS'
 # mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_512_50'
+    model_name = 'FCOS_512_ag2_50'
 else:
     model_name = 'proposed'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
-
+Transform = Transforms()
 
 if __name__ == '__main__':
 
@@ -68,8 +69,8 @@ if __name__ == '__main__':
     # voc_07_train = PascalVoc(root='./data/voc', year = "2007", image_set = "train", download = False, transforms = transform)
     # voc_12_train = PascalVoc(root='./data/voc', year = "2012", image_set = "train", download = False, transforms = transform)
     # voc_07_trainval = PascalVoc(root = './data/voc', year = "2012", image_set = "trainval", download = False)
-    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", False, True, )
-    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, )
+    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", False, True, Transform)
+    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
 
