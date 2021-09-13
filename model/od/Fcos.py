@@ -33,8 +33,8 @@ class FCOS (nn.Module):
         reg = []
         center = []
         for i, feature in enumerate(x):
-            cls_logit, center_logit = self.classification_sub(feature)
-            reg_logit = self.regression_sub(feature)
+            cls_logit = self.classification_sub(feature)
+            center_logit, reg_logit = self.regression_sub(feature)
             cls.append(cls_logit)
             center.append(center_logit)
             reg.append(self.scale_exp[i](reg_logit))
@@ -93,7 +93,7 @@ class ClassificationSub(nn.Module):
         self.cls_c3 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.cls_c4 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.cls = nn.Conv2d(feature, num_class, kernel_size = 3, padding = 1)
-        self.center = nn.Conv2d(feature, 1, kernel_size = 3, padding = 1)
+        # self.center = nn.Conv2d(feature, 1, kernel_size = 3, padding = 1)
         self.gn = nn.GroupNorm(32, feature)
         self.relu = nn.ReLU(inplace = True)
         self.apply(init_conv_rand_nomal)
@@ -105,8 +105,8 @@ class ClassificationSub(nn.Module):
         x = self.relu(self.gn(self.cls_c3(x)))
         x = self.relu(self.gn(self.cls_c4(x)))
         cls = self.cls(x)
-        center = self.center(x)
-        return cls, center
+        # center = self.center(x)
+        return cls
 
 
 class RegressionSub(nn.Module):
@@ -117,6 +117,7 @@ class RegressionSub(nn.Module):
         self.reg_c3 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.reg_c4 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
         self.reg = nn.Conv2d(feature, 4, kernel_size = 3, padding = 1)
+        self.center = nn.Conv2d(feature, 1, kernel_size=3, padding=1)
         self.gn = nn.GroupNorm(32, feature)
         self.relu = nn.ReLU(inplace = True)
         self.apply(init_conv_rand_nomal)
@@ -126,8 +127,9 @@ class RegressionSub(nn.Module):
         x = self.relu(self.gn(self.reg_c2(x)))
         x = self.relu(self.gn(self.reg_c3(x)))
         x = self.relu(self.gn(self.reg_c4(x)))
-        x = self.reg(x)
-        return x
+        reg = self.reg(x)
+        center = self.center(x)
+        return center, reg
 
 
 class ScaleExp(nn.Module):

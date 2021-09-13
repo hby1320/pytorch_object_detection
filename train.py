@@ -18,8 +18,8 @@ import random
 from test import evaluate
 
 EPOCH = 50
-batch_size = 12
-# LR_INIT = 0.0001  # amp not using
+batch_size = 14
+# LR_INIT = 0.001  # amp not using
 LR_INIT = 2e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
@@ -27,7 +27,7 @@ WEIGHTDECAY = 0.0001
 mode = 'FCOS'
 # mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS'
+    model_name = 'FCOS_512_50'
 else:
     model_name = 'proposed'
 opt = 'SGD'
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     # voc_07_trainval = PascalVoc(root = './data/voc', year = "2012", image_set = "trainval", download = False)
     voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", False, True, )
     voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, )
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
+    # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
 
     if ddp_enabled:
@@ -83,8 +83,8 @@ if __name__ == '__main__':
         sampler = False
         train_dataloder = DataLoader(voc_train, batch_size = batch_size, shuffle = True, num_workers = 4,
                                      collate_fn = voc_07_train.collate_fn)
-        valid_dataloder = DataLoader(voc_07_trainval, batch_size = 1, num_workers = 4,
-                                     collate_fn = voc_07_trainval.collate_fn)
+        # valid_dataloder = DataLoader(voc_07_trainval, batch_size = 1, num_workers = 4,
+        #                              collate_fn = voc_07_trainval.collate_fn)
     if mode == 'FCOS':
         model = FCOS([2048, 1024, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
@@ -104,11 +104,11 @@ if __name__ == '__main__':
         optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
     elif opt == 'Adam':
         optimizer = Adam(model.parameters(), lr=LR_INIT)
-    scheduler = LambdaLR(optimizer=optimizer,
-                         lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
-                         last_epoch=-1,
-                         verbose=False)
-    # scheduler = f(optimizer, len(train_dataloder) * EPOCH)
+    # scheduler = LambdaLR(optimizer=optimizer,
+    #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
+    #                      last_epoch=-1,
+    #                      verbose=False)
+    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
     criterion = Loss(mode='iou')  # 'iou'
 

@@ -33,6 +33,7 @@ def iou_2d(cubes_a, cubes_b):
     # expands dim
     cubes_a = np.expand_dims(cubes_a, axis=1)  # [N,1,4]
     cubes_b = np.expand_dims(cubes_b, axis=0)  # [1,M,4]
+
     overlap = np.maximum(0.0,
                          np.minimum(cubes_a[..., 2:], cubes_b[..., 2:]) -
                          np.maximum(cubes_a[..., :2], cubes_b[..., :2]))  # [N,M,(w,h)]
@@ -43,7 +44,6 @@ def iou_2d(cubes_a, cubes_b):
     # compute area
     area_a = np.prod(cubes_a[..., 2:] - cubes_a[..., :2], axis=-1)
     area_b = np.prod(cubes_b[..., 2:] - cubes_b[..., :2], axis=-1)
-
     # compute iou
     iou = overlap / (area_a + area_b - overlap)
     return iou
@@ -139,7 +139,6 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
     return all_ap
 
 
-
 def evaluate(model: nn.Module,
              vall_data_loader: torch.utils.data.DataLoader,
              # criterion: nn.Module,
@@ -171,10 +170,9 @@ def evaluate(model: nn.Module,
     # val_loss = torch.zeros(4, device = device)
     pbar = enumerate(vall_data_loader)
     nb = len(vall_data_loader)
-    pbar = tqdm(pbar, total=nb, desc='Batch', leave=False, disable=False if local_rank == 0 else True)
+    pbar = tqdm(pbar, total=nb, desc='Batch', leave=True, disable=False if local_rank == 0 else True)
     for batch_idx, (imgs, targets, classes) in pbar:
         imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-
         with torch.cuda.amp.autocast(enabled=amp_enable):
             torch.cuda.synchronize()
             start_time = time.time()
@@ -197,27 +195,29 @@ def evaluate(model: nn.Module,
     print(f'all classes AP=====>\n')
     for key, value in all_AP.items():
         print(f'ap for {vialder.id2name[int(key)]} is {value}')
-
     mAP = 0.
     for class_id, class_mAP in all_AP.items():
         mAP += float(class_mAP)
     mAP /= (len(vialder.CLASSES_NAME) - 1)
-    print(f'mAP=====>{mAP:.3f}\n')
+    print(f'mAP=====>{mAP:.3f}\n {inference_time=}')
 
 
 if __name__ == '__main__':
     from dataset.voc import VOCDataset
     from torch.utils.data import DataLoader
+    from model.od.Mc_Fcos import MC_FCOS
 
-    batch_size = 16
+    batch_size = 1
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
 
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", True, True)
+    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [800, 800], "test", True, True)
     valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
                                  collate_fn=voc_07_trainval.collate_fn)
 
     model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
+    model.load_state_dict(torch.load('./checkpoint/FCOS_512_50_50.pth'))
     evaluate(model, valid_dataloder, True, False, device, voc_07_trainval)
