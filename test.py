@@ -213,7 +213,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
 
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [800, 800], "test", True, True)
+    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [800, 800], "test", True, False)
     valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
                                  collate_fn=voc_07_trainval.collate_fn)
 

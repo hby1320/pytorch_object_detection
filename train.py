@@ -178,6 +178,10 @@ if __name__ == '__main__':
         if total_loss > best_loss:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
             best_loss = total_loss
+
+        if epoch == EPOCH:
+            torch.save(model.state_dict(), f"./checkpoint/{model_name}_last.pth")
+
     if writer is not None:
         writer.close()
     if ddp_enabled:

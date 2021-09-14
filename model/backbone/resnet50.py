@@ -47,6 +47,23 @@ class ResNet50(nn.Module):
     Total mult-adds (G): 103.38
     """
 
+    def freeze_bn(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.BatchNorm2d):
+                layer.eval()
+
+    def freeze_stages(self, stage):
+        if stage >= 0:
+            self.bn1.eval()
+            for m in [self.conv1, self.bn1]:
+                for param in m.parameters():
+                    param.requires_grad = False
+        for i in range(1, stage + 1):
+            layer = getattr(self, 'layer{}'.format(i))
+            layer.eval()
+            for param in layer.parameters():
+                param.requires_grad = False
+
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
