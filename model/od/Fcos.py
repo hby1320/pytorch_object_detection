@@ -18,13 +18,28 @@ class FCOS (nn.Module):
     Params size (MB): 129.18
     Estimated Total Size (MB): 1170.39
     """
-    def __init__(self,in_channel:List[int], num_class:int, feature:int):
+    def __init__(self,in_channel:List[int], num_class:int, feature:int, freeze_bn: bool = True):
         super(FCOS, self).__init__()
         self.backbone = ResNet50(3)
+        self.backbone_freeze = freeze_bn
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
         self.classification_sub = ClassificationSub(feature, num_class, 0.01)
         self.regression_sub = RegressionSub(feature)
         self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
+
+        def freeze_bn(module):
+            if isinstance(module,nn.BatchNorm2d):
+                module.eval()
+            classname = module.__class__.__name__
+            if classname.find('BatchNorm') != -1:
+                for p in module.parameters(): p.requires_grad=False
+
+        if self.backbone_freeze:
+            self.apply(freeze_bn)
+            self.backbone.freeze_stages(1)
+            print(f"success frozen BN")
+
+
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         x = self.backbone(x)

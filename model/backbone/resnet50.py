@@ -68,4 +68,6 @@ class ResNet50(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ResNet50(3).to(device)
+    model.freeze_bn()
+    model.freeze_stages(1)
     model_info(model, 1, 3, 512, 512, device)
