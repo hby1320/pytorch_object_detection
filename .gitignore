@@ -1,10 +1,15 @@
 # datasetlocation
 /data/voc
 /data/coco
-# Data file
+
+# Train_file
+runs/
+# Data filename extension
 *.jpg
+*.zip
 *.pth
-/runs
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
