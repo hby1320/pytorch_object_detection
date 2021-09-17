@@ -38,13 +38,13 @@ class DepthWiseConv2d(nn.Conv2d):
 
 
 class PointWiseConv(nn.Conv2d):
-    def __init__(self, in_channel: int, out_channel: int, kernel=1, st=1):
+    def __init__(self, in_channel: int, out_channel: int, kernel=1, st=1, bs=False):
         super().__init__(in_channels=in_channel,
                          out_channels=out_channel,
                          kernel_size=kernel,
                          padding = kernel//2,
                          stride=st,
-                         bias = False
+                         bias = bs
                          )
 
 
