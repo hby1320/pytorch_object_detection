@@ -8,7 +8,7 @@ import torch
 # from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS, GenTargets, Loss
-from model.od.Mc_Fcos import MC_FCOS
+from model.od.proposed import FRFCOS
 from utill.utills import model_info, PolyLR
 from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import LambdaLR
@@ -25,7 +25,7 @@ LR_INIT = 2e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
-mode = 'FCOS'
+mode = 'proposed'
 # mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_512_ag2_50'
@@ -56,21 +56,12 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
 
-    # transform = transforms.Compose([
-    #     transforms.Resize((512,512)),
-    #     transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
-    #     transforms.RandomRotation(0.5),
-    #     transforms.ToTensor(),
-    #     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-    # ])
-
-
     #  1 Data load
     # voc_07_train = PascalVoc(root='./data/voc', year = "2007", image_set = "train", download = False, transforms = transform)
     # voc_12_train = PascalVoc(root='./data/voc', year = "2012", image_set = "train", download = False, transforms = transform)
     # voc_07_trainval = PascalVoc(root = './data/voc', year = "2012", image_set = "trainval", download = False)
-    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "train", False, True, Transform)
-    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "train", False, True, Transform)
+    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
+    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
 
@@ -91,9 +82,9 @@ if __name__ == '__main__':
         gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
                                 limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
     elif mode =='proposed':
-        model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
-        gen_target = GenTargets(strides=[8, 16, 32, 64],
-                                limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512]])
+        model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+        gen_target = GenTargets(strides=[8, 16, 32],
+                                limit_range=[[-1, 64], [64, 128], [128, 999999]])
 
     if ddp_enabled:
         model = torch.nn.parallel.DistributedDataParallel(model)
@@ -179,8 +170,8 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
             best_loss = total_loss
 
-        if epoch == EPOCH:
-            torch.save(model.state_dict(), f"./checkpoint/{model_name}_last.pth")
+        if epoch >= EPOCH-5:
+            torch.save(model.state_dict(), f"./checkpoint/{model_name+1}_last.pth")
 
     if writer is not None:
         writer.close()
