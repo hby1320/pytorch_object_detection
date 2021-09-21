@@ -9,14 +9,14 @@ from typing import List
 
 class FCOS (nn.Module):
     """
-    Total params: 32,294,298
-    Trainable params: 32,294,298
-    Non-trainable params: 0
-    Total mult-adds (G): 148.43
-    Input size (MB): 3.15
-    Forward/backward pass size (MB): 1038.07
-    Params size (MB): 129.18
-    Estimated Total Size (MB): 1170.39
+    Total params: 38,963,484
+    Trainable params: 35,920,348
+    Non-trainable params: 3,043,136
+    Total mult-adds (G): 149.93
+
+    Input size (MB): 3.158.07
+    Forward/backward pass size (MB): 1198.24
+    Params size (MB): 155.85
     """
     def __init__(self,in_channel:List[int], num_class:int, feature:int, freeze_bn: bool = True):
         super(FCOS, self).__init__()
@@ -32,13 +32,13 @@ class FCOS (nn.Module):
                 module.eval()
             classname = module.__class__.__name__
             if classname.find('BatchNorm') != -1:
-                for p in module.parameters(): p.requires_grad=False
+                for p in module.parameters():
+                    p.requires_grad = False  # 학습 x
 
         if self.backbone_freeze:
             self.apply(freeze_bn)
             self.backbone.freeze_stages(1)
             print(f"success frozen BN")
-
 
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
@@ -74,7 +74,7 @@ class FeaturePyramidNetwork(nn.Module):
 
     def init_conv_kaiming(self, module):
         if isinstance(module, nn.Conv2d):
-            nn.init.kaiming_uniform(module.weight, a=1)
+            nn.init.kaiming_uniform_(module.weight, a=1)
 
             if module.bias is not None:
                 nn.init.constant_(module.bias, 0)
@@ -220,7 +220,7 @@ class GenTargets(nn.Module):
 
         x = coords[:,0]
         y = coords[:,1]
-        left_offset = x[None, :,None] - gt_box[..., 0][:, None, :]
+        left_offset = x[None, :,None] - gt_box[..., 0][:, None, :]  # ... 생략 객체
         top_offset = y[None, :,None] - gt_box[..., 1][:, None, :]
         right_offset = gt_box[...,2][:, None, :] - x[None, :, None]
         bottom_offset = gt_box[...,3][:, None, :] - y[None, :, None]
@@ -288,7 +288,7 @@ class Loss(nn.Module):
         pred, target = input
         cls_logit, cen_logit, reg_logit = pred
         cls_target, cen_target, reg_target = target
-        mask_pos = (cen_target > -1).squeeze(dim=-1)
+        mask_pos = (cen_target > -1).squeeze(dim=-1)  ## sqeeze dim 1 제거
 
         cls_loss = torch.mean(self.compute_cls_loss(cls_logit, cls_target, mask_pos))  #평균 이유 : 배치 당 로스
         cnt_loss = torch.mean(self.compute_cnt_loss(cen_logit, cen_target, mask_pos))
@@ -336,7 +336,7 @@ class Loss(nn.Module):
             pred = pred.permute(0, 2, 3, 1)
             pred = torch.reshape(pred, [batch_size, -1, c])
             preds_reshape.append(pred)
-        preds = torch.cat(preds_reshape, dim = 1)
+        preds = torch.cat(preds_reshape, dim = 1) ## 차원 증가
         assert preds.shape == target.shape  # [batch_size,sum(_h*_w),1]
         loss = []
         for batch_index in range(batch_size):
@@ -432,4 +432,4 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FCOS(in_channel=[2048,1024,512], num_class = 80, feature=256).to(device)
     a = torch.rand(1,3,512, 512).to(device)
-    model_info(model, 1, 3, 512, 512, device)
+    model_info(model, 1, 3, 800, 1024, device)
