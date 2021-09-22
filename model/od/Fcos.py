@@ -209,7 +209,7 @@ class GenTargets(nn.Module):
         m = gt_box.shape[1]
 
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = coords_origin_fcos(feature = cls_logit, strides = stride).cuda()
+        coords = coords_origin_fcos(feature = cls_logit, strides = stride).to(cls_logit.device)
         cls_logit = cls_logit.reshape((batch, -1, class_num))
         center_logit = center_logit.permute(0, 2, 3, 1)
         center_logit = center_logit.reshape((batch, -1, 1))
@@ -431,5 +431,13 @@ class Loss(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FCOS(in_channel=[2048,1024,512], num_class = 80, feature=256).to(device)
-    a = torch.rand(1,3,512, 512).to(device)
+    # a = torch.rand(1,3,512, 512).to(device)
+    tns = torch.rand(1, 3, 512, 512).to(device)
     model_info(model, 1, 3, 800, 1024, device)
+    from torch.utils.tensorboard import SummaryWriter
+    import os
+
+    writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'fcos'))
+
+    writer.add_graph(model, tns)
+    writer.close()

@@ -38,10 +38,7 @@ class FRFCOS(nn.Module):
         self.tf3 = PointWiseConv(feature_lv[0], feature)
         self.cls_net = ClassificationSub(feature, num_classes, 0.01)
         self.reg_net = RegressionSub(feature)
-        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
-        # self.head_s = RfFcosHead(128, feature, num_classes)
-        # self.head_m = RfFcosHead(256, feature, num_classes)
-        # self.head_l = RfFcosHead(512, feature, num_classes)
+        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(3)])
 
         def freeze_bn(module):
             if isinstance(module,nn.BatchNorm2d):
@@ -269,9 +266,13 @@ def init_conv_rand_nomal(module, std: int = 0.01):
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256)
-    # print(model)
-    # a = torch.Tensor(1, 3, 512, 512)
-    # b = model(a)
+    model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+    tns = torch.rand(1,3, 512, 512).to(device)
+    # model_info(model, 1, 3, 512, 512, device)
+    from torch.utils.tensorboard import SummaryWriter
+    import os
+    writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'proposed'))
 
-    model_info(model, 1, 3, 512, 512, device)
+    writer.add_graph(model, tns)
+    writer.close()
+

@@ -171,7 +171,7 @@ if __name__ == '__main__':
             best_loss = total_loss
 
         if epoch >= EPOCH-5:
-            torch.save(model.state_dict(), f"./checkpoint/{model_name+1}_last.pth")
+            torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
 
     if writer is not None:
         writer.close()

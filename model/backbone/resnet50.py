@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from utill.utills import model_info
-
+import numpy as np
 
 class ResNet50(nn.Module):
     def __init__(self, re_layer=1):
@@ -18,6 +18,14 @@ class ResNet50(nn.Module):
         self.layer3 = resnet50.layer3
         self.layer4 = resnet50.layer4
         self.re_layer = re_layer
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, np.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
