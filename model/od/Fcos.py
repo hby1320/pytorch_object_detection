@@ -94,9 +94,9 @@ class FeaturePyramidNetwork(nn.Module):
         p3 = self.P3_c1(p3)
         p4 = self.P4_c1(p4)
         p5 = self.P5_c1(p5)
-        p6 = self.P6_c1(p5)
-        p7 = self.P7_c1(self.act(p6))
-        return [p3, p4, p5, p6, p7]
+        # p6 = self.P6_c1(p5)
+        # p7 = self.P7_c1(self.act(p6))
+        return [p3, p4, p5]
 
 
 class ClassificationSub(nn.Module):
@@ -178,6 +178,7 @@ class GenTargets(nn.Module):
         cls_target = []
         center_target = []
         reg_target = []
+        # print(len(cls_logit))
         assert len(gt_box) == len(labels)
         for lv in range(len(cls_logit)):
             lv_out = [cls_logit[lv], center_logit[lv], reg_logit[lv]]
@@ -225,7 +226,8 @@ class GenTargets(nn.Module):
         right_offset = gt_box[...,2][:, None, :] - x[None, :, None]
         bottom_offset = gt_box[...,3][:, None, :] - y[None, :, None]
         offset = torch.stack([left_offset, top_offset, right_offset, bottom_offset], dim= -1)
-        area = (offset[...,0]+offset[...,2])*(offset[...,1]+offset[...,3])
+
+        area = (offset[...,0]+offset[...,2])*(offset[...,1]+offset[...,3]) # h * w = size
 
         offset_min = torch.min(offset, dim=-1)[0]
         offset_max = torch.max(offset, dim=-1)[0]
@@ -233,7 +235,6 @@ class GenTargets(nn.Module):
         mask_gt = offset_min > 0
 
         mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
-        # print(f' {lim_range} {torch.count_nonzero(mask_lv)}')
         ratio = stride * sample_radio_ratio
         gt_center_x = (gt_box[..., 0] + gt_box[..., 2]) / 2
         gt_center_y = (gt_box[..., 1] + gt_box[..., 3]) / 2
@@ -246,7 +247,6 @@ class GenTargets(nn.Module):
         mask_center = gt_off_max < ratio
 
         mask_pos = mask_gt & mask_lv & mask_center  #
-        # print(f'  {torch.count_nonzero(mask_pos)}')
         area[~mask_pos] = 99999999
         area_min_index = torch.min(area, dim = -1)[1]
         reg_target = offset[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim=-1),1)]

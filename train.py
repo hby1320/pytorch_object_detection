@@ -11,7 +11,8 @@ from model.od.Fcos import FCOS, GenTargets, Loss
 from model.od.proposed import FRFCOS
 from utill.utills import model_info, PolyLR
 from torch.optim import SGD, Adam
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
+from torch.optim.swa_utils import AveragedModel, SWALR
 import numpy as np
 from torchvision.transforms import transforms
 import random
@@ -19,21 +20,22 @@ from test import evaluate
 from data.augment import Transforms
 
 EPOCH = 50
-batch_size = 14
+batch_size = 20
 # LR_INIT = 0.001  # amp not using
-LR_INIT = 2e-3
+LR_INIT = 1e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
 mode = 'proposed'
 # mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_512_ag2_50'
+    model_name = 'FCOS_512_3'
 else:
-    model_name = 'proposed'
+    model_name = 'proposed_t'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
+swa_enabled = False
 Transform = Transforms()
 
 if __name__ == '__main__':
@@ -81,34 +83,42 @@ if __name__ == '__main__':
         model = FCOS([2048, 1024, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
                                 limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
+        # gen_target = GenTargets(strides=[8, 16, 32],
+        #                         limit_range=[[-1, 64], [64, 128], [128, 999999]])
     elif mode =='proposed':
         model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
-                                limit_range=[[-1, 64], [64, 128], [128, 999999]])
+                                limit_range=[[-1, 64], [64, 128], [128, 1e5]])
 
     if ddp_enabled:
         model = torch.nn.parallel.DistributedDataParallel(model)
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-
+    if swa_enabled:
+        swa_model = AveragedModel(model)
     print(f'Activated model: {model_name} (rank{local_rank})')
 
     if opt == 'SGD':
         optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
     elif opt == 'Adam':
         optimizer = Adam(model.parameters(), lr=LR_INIT)
+
     # scheduler = LambdaLR(optimizer=optimizer,
     #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
     #                      last_epoch=-1,
     #                      verbose=False)
     scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
-    scaler = torch.cuda.amp.GradScaler(enabled = ddp_enabled)
+    # swa_start = 5
+    # scheduler = CosineAnnealingLR(optimizer, T_max=len(train_dataloder))
+    # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
+
+    scaler = torch.cuda.amp.GradScaler(enabled = amp_enabled)
     criterion = Loss(mode='iou')  # 'iou'
 
 
     nb = len(train_dataloder)
+
     start_epoch = 0
     prev_mAP = 0.0
-    prev_val_loss = 2 ** 32 - 1
     best_loss = 0
 
     if local_rank == 0:
@@ -161,11 +171,15 @@ if __name__ == '__main__':
             # total_losses = (total_loss[-1] * batch_idx + total_loss) / (batch_idx + 1)
             s = (f'{mem:10s} {cls_loss.item():10.4g} {cnt_loss.item():10.4g} {reg_loss.item():10.4g} {total_loss.item():10.4g}')
             pbar.set_description(s)
+        # if epoch > swa_start:
+        #     swa_model.update_parameters(model)
+        #     swa_scheduler.step()
+        #
+        # else:
             scheduler.step()
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
-        ##  epoch 마다 저장
         if total_loss > best_loss:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
             best_loss = total_loss

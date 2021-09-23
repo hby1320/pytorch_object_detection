@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from model.modules.head import FCOSHead, ClipBoxes
 import numpy as np
-from model.od.Fcos import  FCOS
+from model.od.Fcos import FCOS
+from model.od.proposed import FRFCOS
 
 
 
@@ -149,8 +150,8 @@ def evaluate(model: nn.Module,
     score_threshold = 0.05
     nms_iou_threshold = 0.6
     max_detection_boxes_num = 1000
-    strides = [8, 16, 32, 64, 128]
-
+    # strides = [8, 16, 32, 64, 128]
+    strides = [8, 16, 32]
     gt_boxes = []
     gt_classes = []
     pred_boxes = []
@@ -213,11 +214,13 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
 
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [800, 800], "test", True, False)
+    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
     valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
                                  collate_fn=voc_07_trainval.collate_fn)
 
-    model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    # model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
     # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
-    model.load_state_dict(torch.load('./checkpoint/FCOS_512_ag_best_loss.pth'))
+    # model.load_state_dict(torch.load('./checkpoint/FCOS_512_50_test_best_loss.pth'))
+    model.load_state_dict(torch.load('./checkpoint/proposed_30.pth'))
     evaluate(model, valid_dataloder, True, False, device, voc_07_trainval)
