@@ -222,5 +222,5 @@ if __name__ == '__main__':
     model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
     # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
     # model.load_state_dict(torch.load('./checkpoint/FCOS_512_50_test_best_loss.pth'))
-    model.load_state_dict(torch.load('./checkpoint/proposed_30.pth'))
-    evaluate(model, valid_dataloder, True, False, device, voc_07_trainval)
+    model.load_state_dict(torch.load('./checkpoint/proposed_anchor_fix_50.pth'))
+    evaluate(model, valid_dataloder, False, False, device, voc_07_trainval)

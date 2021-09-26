@@ -53,23 +53,23 @@ def shift_xy(shape, stride, anchor):
     return all_anchor
 
 
-def coords_origin_fcos(feature: torch.Tensor, strides=List[int]):  # 원본 FCOS의 Location과 동일
+def coords_origin_fcos(feature, strides):  # 원본 FCOS의 Location과 동일
 
     h, w = feature.shape[1:3]  # b,h,w,c 중 h,c
+
     shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
     shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
 
     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
     shift_x = torch.reshape(shift_x, [-1])
     shift_y = torch.reshape(shift_y, [-1])
-    coords = torch.stack([shift_x, shift_y], -1) + strides // 2  # 원본의 경우 1 이부분 차이있는지 확인필요
+    coords = torch.stack([shift_x, shift_y], -1) + strides // 2
     return coords
 
 
 class PolyLR(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer: torch.optim.Optimizer, max_iter: int, power=0.9, min_lr=1e-6, last_epoch=-1):
         assert max_iter != 0
-
         self.max_iter = max_iter
         self.power = power
         self.min_lr = min_lr

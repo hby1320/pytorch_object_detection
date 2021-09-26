@@ -27,8 +27,8 @@ class VOCDataset(torch.utils.data.Dataset):
         "cow",  "diningtable", "dog", "horse", "motorbike",
         "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
 
-    def __init__(self,root_dir, resize_size:List[int],
-                 split='trainval', use_difficult=False, is_train=True, augment=None):
+    def __init__(self, root_dir, resize_size=[800, 1333], split='trainval', use_difficult=False, is_train=True,
+                 augment=None):
         self.root = root_dir
         self.use_difficult = use_difficult
         self.imgset = split
@@ -40,25 +40,26 @@ class VOCDataset(torch.utils.data.Dataset):
         with open(self._imgsetpath % self.imgset) as f:
             self.img_ids = f.readlines()
         self.img_ids = [x.strip() for x in self.img_ids]
-        self.name2id = dict(zip(VOCDataset.CLASSES_NAME,range(len(VOCDataset.CLASSES_NAME))))
-        self.id2name = {v:k for k,v in self.name2id.items()}
+        self.name2id = dict(zip(VOCDataset.CLASSES_NAME, range(len(VOCDataset.CLASSES_NAME))))
+        self.id2name = {v: k for k, v in self.name2id.items()}
         self.resize_size = resize_size
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
         self.train = is_train
         self.augment = augment
-        # print(f"INFO=====>voc dataset init finished!!")
+        print("INFO=====>voc dataset init finished  ! !")
 
     def __len__(self):
         return len(self.img_ids)
 
-    def __getitem__(self,index):
+    def __getitem__(self, index):
+
         img_id = self.img_ids[index]
         img = Image.open(self._imgpath % img_id)
+
         anno = ET.parse(self._annopath % img_id).getroot()
         boxes = []
         classes = []
-
         for obj in anno.iter("object"):
             difficult = int(obj.find("difficult").text) == 1
             if not self.use_difficult and difficult:
@@ -81,14 +82,14 @@ class VOCDataset(torch.utils.data.Dataset):
             name = obj.find("name").text.lower().strip()
             classes.append(self.name2id[name])
 
-        boxes = np.array(boxes,dtype=np.float32)
+        boxes = np.array(boxes, dtype=np.float32)
         if self.train:
             if random.random() < 0.5:
                 img, boxes = flip(img, boxes)
             if self.augment is not None:
                 img, boxes = self.augment(img, boxes)
         img = np.array(img)
-        img, boxes = self.preprocess_img_boxes(img,boxes,self.resize_size)
+        img, boxes = self.preprocess_img_boxes(img, boxes, self.resize_size)
 
         img = transforms.ToTensor()(img)
         boxes = torch.from_numpy(boxes)
@@ -96,8 +97,7 @@ class VOCDataset(torch.utils.data.Dataset):
 
         return img, boxes, classes
 
-    def preprocess_img_boxes(self,image, boxes, input_ksize):
-
+    def preprocess_img_boxes(self, image, boxes, input_ksize):
         '''
         resize image and bboxes
         Returns
@@ -105,20 +105,20 @@ class VOCDataset(torch.utils.data.Dataset):
         bboxes: [None,4]
         '''
         min_side, max_side = input_ksize
-        h,  w, _ = image.shape
+        h, w, _ = image.shape
 
         smallest_side = min(w, h)
-        largest_side=max(w, h)
-        scale=min_side/smallest_side
-        if largest_side*scale>max_side:
-            scale=max_side/largest_side
-        nw, nh  = int(scale * w), int(scale * h)
+        largest_side = max(w, h)
+        scale = min_side / smallest_side
+        if largest_side * scale > max_side:
+            scale = max_side / largest_side
+        nw, nh = int(scale * w), int(scale * h)
         image_resized = cv2.resize(image, (nw, nh))
 
         pad_w = 32 - nw % 32
         pad_h = 32 - nh % 32
 
-        image_paded = np.zeros(shape= [nh+pad_h, nw+pad_w, 3], dtype=np.uint8)
+        image_paded = np.zeros(shape=[nh + pad_h, nw + pad_w, 3], dtype=np.uint8)
         image_paded[:nh, :nw, :] = image_resized
 
         if boxes is None:
@@ -129,7 +129,7 @@ class VOCDataset(torch.utils.data.Dataset):
             return image_paded, boxes
 
     def collate_fn(self, data):
-        imgs_list,boxes_list,classes_list = zip(*data)
+        imgs_list, boxes_list, classes_list = zip(*data)
         assert len(imgs_list) == len(boxes_list) == len(classes_list)
         batch_size = len(boxes_list)
         pad_imgs_list = []
@@ -142,26 +142,24 @@ class VOCDataset(torch.utils.data.Dataset):
         max_w = np.array(w_list).max()
         for i in range(batch_size):
             img = imgs_list[i]
-            pad_imgs_list.append(transforms.Normalize(self.mean, self.std, inplace=True)
-                                 (torch.nn.functional.pad(img, (0, int(max_w-img.shape[2]), 0, int(max_h-img.shape[1])), value=0.)))
-
+            pad_imgs_list.append(transforms.Normalize(self.mean, self.std, inplace=True)(
+                torch.nn.functional.pad(img, (0, int(max_w - img.shape[2]), 0, int(max_h - img.shape[1])), value=0.)))
 
         max_num = 0
         for i in range(batch_size):
             n = boxes_list[i].shape[0]
-            if n > max_num:
-                max_num = n
+            if n > max_num: max_num = n
         for i in range(batch_size):
-            pad_boxes_list.append(torch.nn.functional.pad(boxes_list[i],(0, 0, 0, max_num-boxes_list[i].shape[0]),value = -1))
-            pad_classes_list.append(torch.nn.functional.pad(classes_list[i],(0, max_num-classes_list[i].shape[0]),value = -1))
+            pad_boxes_list.append(
+                torch.nn.functional.pad(boxes_list[i], (0, 0, 0, max_num - boxes_list[i].shape[0]), value=-1))
+            pad_classes_list.append(
+                torch.nn.functional.pad(classes_list[i], (0, max_num - classes_list[i].shape[0]), value=-1))
 
-
-        batch_boxes=torch.stack(pad_boxes_list)
+        batch_boxes = torch.stack(pad_boxes_list)
         batch_classes = torch.stack(pad_classes_list)
         batch_imgs = torch.stack(pad_imgs_list)
 
         return batch_imgs, batch_boxes, batch_classes
-
 
 if __name__=="__main__":
     pass
