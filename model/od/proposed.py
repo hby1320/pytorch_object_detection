@@ -37,9 +37,6 @@ class FRFCOS(nn.Module):
         self.tf1 = PointWiseConv(feature_lv[2], feature)
         self.tf2 = PointWiseConv(feature_lv[1], feature)
         self.tf3 = PointWiseConv(feature_lv[0], feature)
-        # self.cls_net = ClassificationSub(feature, num_classes, 0.01)
-        # self.reg_net = RegressionSub(feature)
-        # self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(3)])
         self.head = HeadFRFCOS(feature, num_classes, 0.01)
         def freeze_bn(module):
             if isinstance(module, nn.BatchNorm2d):

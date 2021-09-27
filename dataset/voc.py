@@ -78,7 +78,6 @@ class VOCDataset(torch.utils.data.Dataset):
                 map(lambda x: x - TO_REMOVE, list(map(float, box)))
             )
             boxes.append(box)
-
             name = obj.find("name").text.lower().strip()
             classes.append(self.name2id[name])
 

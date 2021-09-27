@@ -23,7 +23,7 @@ class FCOS(nn.Module):
     def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
         super(FCOS, self).__init__()
         self.backbone = ResNet50(3)
-        # self.backbone = resnet50(pretrained=True)
+        # self.backbone = resnet50(pretrained=True, if_include_top=False)
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
         self.head = HeadFCOS(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
@@ -33,27 +33,17 @@ class FCOS(nn.Module):
                 module.eval()
             classname = module.__class__.__name__
             if classname.find('BatchNorm') != -1:
-                for p in module.parameters():
-                    p.requires_grad = False  # 학습 x
-        #
+                for p in module.parameters():p.requires_grad = False  # 학습 x
         if self.backbone_freeze:
             self.apply(freeze_bn)
-            self.backbone.freeze_stages(1)
             print(f"success frozen BN")
+            self.backbone.freeze_stages(1)
+            print(f"success frozen_stage")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.backbone(x)
-        x = self.FPN(x)
+        x1,x2,x3 = self.backbone(x)
+        x = self.FPN([x1,x2,x3])
         cls, cnt, reg = self.head(x)
-        # cls = []
-        # reg = []
-        # center = []
-        # for i, feature in enumerate(x):
-        #     cls_logit = self.classification_sub(feature)
-        #     center_logit, reg_logit = self.regression_sub(feature)
-        #     cls.append(cls_logit)
-        #     center.append(center_logit)
-        #     reg.append(self.scale_exp[i](reg_logit))
         return [cls, cnt, reg]
 
 
@@ -108,7 +98,7 @@ class HeadFCOS(nn.Module):
         cls_branch = []
         reg_branch = []
 
-        for i in range(2):
+        for i in range(4):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
@@ -127,7 +117,7 @@ class HeadFCOS(nn.Module):
         self.apply(self.init_conv_RandomNormal)
 
         nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))
-        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(3)])
+        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
 
     def init_conv_RandomNormal(self, module, std=0.01):
         if isinstance(module, nn.Conv2d):
@@ -258,13 +248,13 @@ class GenTargets(nn.Module):
         # m = gt_box.shape[1]
 
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = coords_origin_fcos(feature = cls_logit, strides = stride).to(cls_logit.device)
+        coords = coords_origin_fcos(feature = cls_logit, strides = stride).to(gt_box.device) # [H*W , 2]
 
         cls_logit = cls_logit.reshape((batch, -1, class_num))
-        # center_logit = center_logit.permute(0, 2, 3, 1)
-        # center_logit = center_logit.reshape((batch, -1, 1))
-        # reg_logit = reg_logit.permute(0, 2, 3, 1)
-        # reg_logit = reg_logit.reshape((batch, -1, 4))
+        center_logit = center_logit.permute(0, 2, 3, 1)
+        center_logit = center_logit.reshape((batch, -1, 1))
+        reg_logit = reg_logit.permute(0, 2, 3, 1)
+        reg_logit = reg_logit.reshape((batch, -1, 4))
 
         hw = cls_logit.shape[1]
 
@@ -335,10 +325,13 @@ class Loss(nn.Module):
         pred, target = input
         cls_logit, cen_logit, reg_logit = pred
         cls_target, cen_target, reg_target = target
+
         mask_pos = (cen_target > -1).squeeze(dim=-1)  ## sqeeze dim 1 제거
+
         cls_loss = self.compute_cls_loss(cls_logit, cls_target, mask_pos).mean()  #평균 이유 : 배치 당 로스
         cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
         reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos, self.mode).mean()
+
         total_loss = cls_loss + cnt_loss + reg_loss
         return cls_loss, cnt_loss, reg_loss, total_loss
 
@@ -365,11 +358,12 @@ class Loss(nn.Module):
         return torch.cat(loss, dim=0) / num_pos  # [batch_size,]
 
     def compute_cnt_loss(self, preds, target, mask):
+
         batch_size = target.shape[0]
         c = target.shape[-1]
         preds_reshape = []
         mask = mask.unsqueeze(dim = -1)
-        # mask=targets>-1#[batch_size,sum(_h*_w),1]
+        # mask= target>-1#[batch_size,sum(_h*_w),1]
         num_pos = torch.sum(mask, dim = [1, 2]).clamp_(min = 1).float()  # [batch_size,]
         for pred in preds:
             pred = pred.permute(0, 2, 3, 1)
@@ -382,9 +376,7 @@ class Loss(nn.Module):
             pred_pos = preds[batch_index][mask[batch_index]]  # [num_pos_b,]
             target_pos = target[batch_index][mask[batch_index]]  # [num_pos_b,]
             assert len(pred_pos.shape) == 1
-            loss.append(nn.functional.binary_cross_entropy_with_logits(input = pred_pos,
-                                                           target = target_pos,
-                                                           reduction = 'sum').view(1))
+            loss.append(nn.functional.binary_cross_entropy_with_logits(input=pred_pos,target=target_pos,reduction='sum').view(1))
             return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
 
     def compute_reg_loss(self, preds, target, mask, mode='iou'):
@@ -430,18 +422,6 @@ class Loss(nn.Module):
         loss = -iou.clamp(min=1e-6).log()
         return loss.sum()
 
-    def focal_loss_from_logits(self, preds, targets, gamma=2.0, alpha=0.25):
-        '''
-        Args:
-        preds: [n,class_num]
-        targets: [n,class_num]
-        '''
-        preds = preds.sigmoid()
-        pt = preds * targets + (1.0 - preds) * (1.0 - targets)
-        w = alpha * targets + (1.0 - alpha) * (1.0 - targets)
-        loss = -w * torch.pow((1.0 - pt), gamma) * pt.log()
-        return loss.sum()
-
     def giou_loss(self, preds, targets):
         '''
         Args:
@@ -465,6 +445,21 @@ class Loss(nn.Module):
         giou = iou - (G_area - union) / G_area.clamp(1e-10)
         loss = 1. - giou
         return loss.sum()
+
+    def focal_loss_from_logits(self, preds, targets, gamma=2.0, alpha=0.25):
+        '''
+        Args:
+        preds: [n,class_num]
+        targets: [n,class_num]
+        '''
+
+        preds = preds.sigmoid()
+        preds = torch.clip(preds, min=0.000005, max=0.99999999995)
+        pt = preds * targets + (1.0 - preds) * (1.0 - targets)
+        w = alpha * targets + (1.0 - alpha) * (1.0 - targets)
+        loss = -w * torch.pow((1.0 - pt), gamma) * pt.log()
+        return loss.sum()
+
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

@@ -67,6 +67,17 @@ def coords_origin_fcos(feature, strides):  # 원본 FCOS의 Location과 동일
     return coords
 
 
+def voc_collect(samples):
+    imgs = [sample['img'] for sample in samples]
+    targets = [sample['targets'] for sample in samples]
+    lables = [sample['lables'] for sample in samples]
+    padded_imgs = torch.nn.utils.rnn.pad_sequence(imgs, batch_first=True)
+    padded_targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True)
+    padded_tlables = torch.nn.utils.rnn.pad_sequence(lables, batch_first=True)
+
+    return padded_imgs, padded_targets, padded_tlables
+
+
 class PolyLR(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer: torch.optim.Optimizer, max_iter: int, power=0.9, min_lr=1e-6, last_epoch=-1):
         assert max_iter != 0
@@ -78,6 +89,7 @@ class PolyLR(torch.optim.lr_scheduler._LRScheduler):
     def get_lr(self):
         return [max(base_lr * (1 - self.last_epoch / self.max_iter) ** self.power, self.min_lr)
                 for base_lr in self.base_lrs]
+
 
 class DataEncoder:
     def __init__(self):

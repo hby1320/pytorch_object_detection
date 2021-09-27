@@ -4,11 +4,11 @@ from torch.utils.data import DataLoader, ConcatDataset
 import torch.utils.tensorboard
 from tqdm import tqdm
 import torch
-# from dataset.pascalvoc import PascalVoc
+from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS, GenTargets, Loss
 from model.od.proposed import FRFCOS
-from utill.utills import model_info, PolyLR
+from utill.utills import model_info, PolyLR, voc_collect
 from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 from torch.optim.swa_utils import AveragedModel, SWALR
@@ -18,17 +18,17 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 50
-batch_size = 16
-# LR_INIT = 0.001  # amp not using
-LR_INIT = 1e-2
+EPOCH = 30
+batch_size = 20
+
+LR_INIT = 2e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
-# mode = 'FCOS'
-mode = 'proposed'
+mode = 'FCOS'
+# mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_512_loss_50'
+    model_name = 'FCOS_512_test'
 else:
     model_name = 'proposed_gn'
 opt = 'SGD'
@@ -38,7 +38,17 @@ swa_enabled = False
 Transform = Transforms()
 
 if __name__ == '__main__':
-    # DDP option
+    data_transform = transforms.Compose([
+        transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.RandomVerticalFlip(0.5),
+        transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
+        transforms.RandomRotation(degrees=10),
+        transforms.RandomSizedCrop(512)
+
+    ])
+    # DDP setting
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
         torch.distributed.init_process_group(backend= 'nccl', init_method='env://')
@@ -49,17 +59,21 @@ if __name__ == '__main__':
         local_rank = 0
         world_size = 0
 
-    # Device
+    # Device setting
     if torch.cuda.is_available():
         torch.cuda.set_device(local_rank)
         device = torch.device('cuda', local_rank)
     else:
         device = torch.device('cpu')
 
-    #  1 Data load
+    #  1 Data loader
+    voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
+                             transforms = data_transform)
 
-    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
-    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
+    voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
+                             transforms = data_transform)
+    # voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
+    # voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
     print(len(voc_07_train+voc_12_train))
@@ -71,8 +85,10 @@ if __name__ == '__main__':
                                      num_workers = 4, pin_memory= pin_memory, collate_fn = voc_07_train.collate_fn)
     else:
         sampler = False
-        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
-                                     collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
+        # train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
+        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
+        train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
+                                     collate_fn = voc_collect,  pin_memory= True)
         # valid_dataloder = DataLoader(voc_07_trainval, batch_size = 1, num_workers = 4,
         #                              collate_fn = voc_07_trainval.collate_fn)
     if mode == 'FCOS':
@@ -80,7 +96,7 @@ if __name__ == '__main__':
         # gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
         #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
         gen_target = GenTargets(strides=[8, 16, 32],
-                                limit_range=[[-1, 128], [128, 256], [256, 999999]])
+                                limit_range=[[-1, 64], [64, 128], [128, 999999]])
     elif mode =='proposed':
         model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
@@ -102,7 +118,7 @@ if __name__ == '__main__':
     #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
     #                      last_epoch=-1,
     #                      verbose=False)
-    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     # swa_start = 5
     # scheduler = CosineAnnealingLR(optimizer, T_max=len(train_dataloder))
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
@@ -143,20 +159,20 @@ if __name__ == '__main__':
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
 
-            if GLOBAL_STEPS < WARMPUP_STEPS:
-                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
-            if GLOBAL_STEPS == 20001:
-                lr = LR_INIT * 0.1
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
-            if GLOBAL_STEPS == 27001:
-                lr = LR_INIT * 0.01
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
+            # if GLOBAL_STEPS < WARMPUP_STEPS:
+            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 20001:
+            #     lr = LR_INIT * 0.1
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 27001:
+            #     lr = LR_INIT * 0.01
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
 
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
@@ -182,7 +198,7 @@ if __name__ == '__main__':
                 writer.add_scalar(f'loss/training/batch reg_loss', losses[2], epoch)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)
-            # total_losses = (total_loss[-1] * batch_idx + total_loss) / (batch_idx + 1)
+
             s = (f'{mem:10s} {losses[0].mean():10.4g} {losses[1].mean():10.4g} {losses[2].mean():10.4g} {losses[-1].mean():10.4g}')
             pbar.set_description(s)
             GLOBAL_STEPS += 1
@@ -193,7 +209,7 @@ if __name__ == '__main__':
         # else:
         #     scheduler.step()
 
-            # scheduler.step()
+            scheduler.step()
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 

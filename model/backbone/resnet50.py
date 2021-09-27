@@ -55,7 +55,6 @@ class ResNet50(nn.Module):
     Non-trainable params: 0 
     Total mult-adds (G): 103.38
     """
-
     def freeze_bn(self):
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):

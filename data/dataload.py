@@ -10,8 +10,8 @@ from typing import Any, Callable, Dict, Optional, Tuple, List
 import numpy as np
 import xml.etree.ElementTree as ET ## voc GT XML
 import collections
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
+# import albumentations as A
+# from albumentations.pytorch import ToTensorV2
 import yaml
 from dataset.pascalvoc import PascalVoc
 from utill.utills import DataEncoder
@@ -20,26 +20,21 @@ import cv2
 ## ->FIX 복수의 데이터세트에서 사용가능하게 수정하기  voc폴더에 한번에 불러 올수 있도록 수정 XML 데이터 불러오기 ## YAML 사용해서 파일로 정리
 ## -> coco 데이터세트도 동일하게 만들기
 ##
-# with open('./Data/voc.yaml') as file:
-#     voc_data = yaml.load(file, Loader=yaml.FullLoader)
+with open('../data/voc.yaml') as file:
+    voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
-# path2data = '../Data/voc'
-# if not os.path.exists(path2data):
-#     os.mkdir(path2data)
-#
-#
-# voc_class = voc_data['class']
+path2data = '../Data/voc'
+voc_class = voc_data['class']
 
-class dataload_voc(VOCDetection):
 
-    # def __init__.py(self, cfg_yaml, root: str):
-    #     super().__init__.py(root)
-    #
-    #     with open(cfg_yaml) as file:
-    #         voc_data = yaml.load(file, Loader = yaml.FullLoad)
+class VOCDataset(VOCDetection):
+    def __init__(self, cfg_yaml, root: str):
+        super().__init__(root)
+        with open(cfg_yaml) as file:
+            voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
     def __getitem__(self, index):
-        img = np.array(Image.open(self.images[index]).convert('RGB'))
+        image = np.array(Image.open(self.images[index]).convert('RGB'))
         target = self.parse_voc_xml(ET.parse(self.annotations[index]).getroot())  # xml파일 분석하여 dict으로 받아오기
 
         targets = []  # 바운딩 박스 좌표
@@ -57,11 +52,16 @@ class dataload_voc(VOCDetection):
         #     img = augmentations['image']
         #     targets = augmentations['bboxes']
         if self.transforms is not None:
-            img, target = self.transforms(img, target)
+            image, target = self.transforms(image, target)
 
-        return img, targets, labels
+        return {'img': image, 'targets': targets, 'lables': labels}
 
-    def parse_voc_xml(self, node: ET.Element) -> Dict[str, any]: #parse_voc_xml[str, any]:  # xml 파일을 dictionary로 반환
+    def parse_voc_xml(self, node: ET.Element) -> Dict[str, any]:
+
+        """
+        :param node:
+        :return:
+        """
         voc_dict: Dict[str, any] = {}
         children = list(node)
         if children:
@@ -77,6 +77,7 @@ class dataload_voc(VOCDetection):
             if not children:
                 voc_dict[node.tag] = text
         return voc_dict
+
 
 def data_set_show(img, targets, labels, classes):
     img = to_pil_image(img)
@@ -102,52 +103,54 @@ def data_set_show(img, targets, labels, classes):
 
 
 if __name__ == '__main__':
-    IMAGE_SIZE = 600
-    scale = 1.0
-    # train_transforms = A.Compose([
-    #     A.LongestMaxSize(max_size = int(IMAGE_SIZE * scale)),
-    #     A.PadIfNeeded(min_height = int(IMAGE_SIZE * scale), min_width = int(IMAGE_SIZE * scale),
-    #                   border_mode = cv2.BORDER_CONSTANT),
-    #     ToTensorV2()
-    # ],
-    #     bbox_params = A.BboxParams(format = 'pascal_voc', min_visibility = 0.4, label_fields = [])
-    # )
 
+    def voc_collect(samples):
+        imgs = [sample['img'] for sample in samples]
+        targets = [sample['targets'] for sample in samples]
+        lables = [sample['lables'] for sample in samples]
+        padded_imgs = torch.nn.utils.rnn.pad_sequence(imgs, batch_first=True)
+        padded_targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True)
+        padded_tlables = torch.nn.utils.rnn.pad_sequence(lables, batch_first=True)
+
+        return padded_imgs, padded_targets, padded_tlables
 
     # transforms 적용하기
     # transforms = train_transforms
     #
     # transform_train = torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
     data_transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize((600, 600)),
+        torchvision.transforms.Resize((512, 512)),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean = [0.485, 0.456, 0.406],
-                             std = [0.229, 0.224, 0.225])
+        torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
     ])
+
     with open('./voc.yaml') as file:
         voc_data = yaml.load(file, Loader = yaml.FullLoader)
-    print(voc_data['train'])
     # train_12_ds = dataload_voc(voc_data['train'], year = '2012', image_set = 'train', download = False)
     # train_07_ds = dataload_voc(voc_data['train'], year = '2007', image_set = 'train', download = False)
     # print(f'12 {len(train_12_ds)}, 07 {len(train_07_ds)}')
     # train_ds = train_12_ds + train_07_ds
-    a = PascalVoc(root = "./voc", year = "2007", image_set = "train", download = False, transforms = data_transform)
-    b = PascalVoc(root = "./voc", year = "2012", image_set = "train", download = False, transforms = data_transform)
+    a = PascalVoc(root = "../data/voc/", year = "2007", image_set = "train", download = False, transforms = data_transform)
+    b = PascalVoc(root = "../data/voc/", year = "2012", image_set = "train", download = False, transforms = data_transform)
     train_ds = a + b
 
 
-    test_data = DataLoader(a, batch_size = 1, shuffle = True, num_workers = 4, collate_fn = a.retina_collate_fn)
+    test_data = DataLoader(train_ds, batch_size = 20, shuffle = True, num_workers = 4, collate_fn=voc_collect)
 
     # for i in range(10):
     #     img, target, label = train_ds[i]
-    #     plt.figure(figsize = (10, 10))
-    #     data_set_show(img, target, label, voc_data['class'])
+    #     print(f'{img.size()=}\n {target.size()=} \n {label.size()=}')
+        # plt.figure(figsize = (10, 10))
+        # data_set_show(img, target, label, voc_data['class'])
     for i, (img, targets, labels) in enumerate(test_data):
         print(img.shape)
-        d = targets
-        e = labels
-    #
-#
+        print(targets.shape)
+        print(labels.shape)
+    #     d = targets
+    #     e = labels
+    # for data in test_data:
+    #     print(data['img'])
 # import torch
 # import xml.etree.ElementTree as et
 # import os
