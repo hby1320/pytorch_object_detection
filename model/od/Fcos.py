@@ -16,6 +16,7 @@ class FCOS(nn.Module):
     Non-trainable params: 3,043,136
     Total mult-adds (G): 149.93
 
+
     Input size (MB): 3.158.07
     Forward/backward pass size (MB): 1198.24
     Params size (MB): 155.85
@@ -139,67 +140,6 @@ class HeadFCOS(nn.Module):
         return cls_logits, cnt_logits, reg_preds
 
 
-# class ClassificationSub(nn.Module):
-#     def __init__(self, feature, num_class, prior):
-#         super(ClassificationSub, self).__init__()
-#         self.prior = prior
-#         self.cls_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.cls_c2 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.cls_c3 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.cls_c4 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.cls = nn.Conv2d(feature, num_class, kernel_size = 3, padding = 1)
-#         # self.center = nn.Conv2d(feature, 1, kernel_size = 3, padding = 1)
-#         self.gn = nn.GroupNorm(32, feature)
-#         self.gn2 = nn.GroupNorm(32, feature)
-#         self.gn3 = nn.GroupNorm(32, feature)
-#         self.gn4 = nn.GroupNorm(32, feature)
-#         self.relu = nn.ReLU(inplace=True)
-#         self.relu2 = nn.ReLU(inplace=True)
-#         self.relu3 = nn.ReLU(inplace=True)
-#         self.relu4 = nn.ReLU(inplace=True)
-#         self.apply(init_conv_rand_nomal)
-#         nn.init.constant_(self.cls.bias, -np.log((1-self.prior) / self.prior))
-#
-#     def forward(self, x: torch.Tensor) -> torch.Tensor:
-#         x = self.relu(self.gn(self.cls_c1(x)))
-#         x = self.relu2(self.gn2(self.cls_c2(x)))
-#         x = self.relu3(self.gn3(self.cls_c3(x)))
-#         x = self.relu4(self.gn4(self.cls_c4(x)))
-#         cls = self.cls(x)
-#         # center = self.center(x)
-#         return cls
-#
-#
-# class RegressionSub(nn.Module):
-#     def __init__(self, feature):
-#         super(RegressionSub, self).__init__()
-#         self.reg_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.reg_c2 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.reg_c3 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.reg_c4 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, bias=False)
-#         self.reg = nn.Conv2d(feature, 4, kernel_size=3, padding=1)
-#         self.center = nn.Conv2d(feature, 1, kernel_size=3, padding=1)
-#         self.gn = nn.GroupNorm(32, feature)
-#         self.gn2 = nn.GroupNorm(32, feature)
-#         self.gn3 = nn.GroupNorm(32, feature)
-#         self.gn4 = nn.GroupNorm(32, feature)
-#         self.relu = nn.ReLU(inplace=True)
-#         self.relu2 = nn.ReLU(inplace=True)
-#         self.relu3 = nn.ReLU(inplace=True)
-#         self.relu4 = nn.ReLU(inplace=True)
-#         self.apply(init_conv_rand_nomal)
-#
-#     def forward(self, x: torch.Tensor) -> torch.Tensor:
-#         x = self.relu(self.gn(self.reg_c1(x)))
-#         x = self.relu2(self.gn2(self.reg_c2(x)))
-#         x = self.relu3(self.gn3(self.reg_c3(x)))
-#         x = self.relu4(self.gn4(self.reg_c4(x)))
-#         reg = self.reg(x)
-#         center = self.center(x)
-#         return center, reg
-#
-
-
 class ScaleExp(nn.Module):
     def __init__(self,init_value=1.0):
         super(ScaleExp, self).__init__()
@@ -233,49 +173,60 @@ class GenTargets(nn.Module):
         reg_target = []
         assert len(self.stride) == len(cls_logit)
         for lv in range(len(cls_logit)):
-            lv_out = [cls_logit[lv], center_logit[lv], reg_logit[lv]]
+            lv_out = [cls_logit[lv], center_logit[lv], reg_logit[lv]]  # output shape 8 16 32 64 128
             level_targets = self.generate_target(lv_out, gt_box, labels, self.stride[lv], self.lim_range[lv])
             cls_target.append(level_targets[0])
             center_target.append(level_targets[1])
             reg_target.append(level_targets[2])
         return torch.cat(cls_target, dim=1), torch.cat(center_target, dim=1), torch.cat(reg_target, dim=1)
 
-    def generate_target(self, lv_out, gt_box, labels, stride, lim_range, sample_radio_ratio=1.5):
+    def generate_target(self,
+                        lv_out : torch.Tensor,
+                        gt_box: torch.Tensor,
+                        labels: torch.Tensor,
+                        stride: List[int],
+                        lim_range: List[List[int]],
+                        sample_radio_ratio: float = 1.5) -> torch.Tensor:
+        """
+        :param lv_out: class, cnt, reg
+        :param gt_box: [N, M, 4]
+        :param labels: [N, M, C]
+        :param stride: [8, 16, 32, 64, 128]
+        :param lim_range:
+        :param sample_radio_ratio: default 1.5
+        :return: torch.Tensor
+        """
 
-        cls_logit, center_logit, reg_logit = lv_out
-        batch = cls_logit.shape[0]
+        cls_logit, center_logit, reg_logit = lv_out  # [8, 16, 32, 64, 128]
+        batch = cls_logit.shape[0]  # [N,C,H,W]
         class_num = cls_logit.shape[1]
-        # m = gt_box.shape[1]
-
+        m = gt_box.shape[1]
         cls_logit = cls_logit.permute(0, 2, 3, 1)  # b,n,h,w -> b,h,w,c
-        coords = coords_origin_fcos(feature = cls_logit, strides = stride).to(gt_box.device) # [H*W , 2]
-
-        cls_logit = cls_logit.reshape((batch, -1, class_num))
+        coords = coords_origin_fcos(feature = cls_logit, strides = stride).to(device=gt_box.device)  # [H*W , 2]
+        cls_logit = cls_logit.reshape((batch, -1, class_num))  # [N, H*W, C]
         center_logit = center_logit.permute(0, 2, 3, 1)
         center_logit = center_logit.reshape((batch, -1, 1))
         reg_logit = reg_logit.permute(0, 2, 3, 1)
         reg_logit = reg_logit.reshape((batch, -1, 4))
 
-        hw = cls_logit.shape[1]
+        hw = cls_logit.shape[1]  # [N, H*W, C]
 
-        x = coords[:, 0]
-        y = coords[:, 1]
-        left_offset = x[None, :, None] - gt_box[..., 0][:, None, :]  # ... 생략 객체
+        x = coords[:, 0]  # [H*W , 0] X
+        y = coords[:, 1]  # [H*W , 0] Y
+        left_offset = x[None, :, None] - gt_box[..., 0][:, None, :]  # x:[1, H*W, 1] - gt_box: [N,1,4]
         top_offset = y[None, :, None] - gt_box[..., 1][:, None, :]
         right_offset = gt_box[..., 2][:, None, :] - x[None, :, None]
         bottom_offset = gt_box[..., 3][:, None, :] - y[None, :, None]
         offset = torch.stack([left_offset, top_offset, right_offset, bottom_offset], dim=-1)
-
-        area = (offset[..., 0]+offset[..., 2]) * (offset[..., 1]+offset[..., 3])  # h * w = size
-
-        offset_min = torch.min(offset, dim=-1)[0]
+        #torch.Size([20, 4096, 4, 4])
+        area = (offset[..., 0]+offset[..., 2]) * (offset[..., 1]+offset[..., 3])  # [Class, H*W, M]
+        offset_min = torch.min(offset, dim=-1)[0]  # [Class, H*W, M]min[0] -> Value
         offset_max = torch.max(offset, dim=-1)[0]
-
-        mask_gt = offset_min > 0
-        mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
+        mask_gt = offset_min > 0  #음수일제 정답 아니기 때문에
+        mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])  # 해당 특징맵 LV 이하 값 제거
 
         ratio = stride * sample_radio_ratio
-        gt_center_x = (gt_box[..., 0] + gt_box[..., 2]) / 2
+        gt_center_x = (gt_box[..., 0] + gt_box[..., 2]) / 2  # 중심 생성
         gt_center_y = (gt_box[..., 1] + gt_box[..., 3]) / 2
         gt_left_offset = x[None, :, None] - gt_center_x[:, None, :]  # [1,h*w,1]-[batch_size,1,m]-->[batch_size,h*w,m]
         gt_top_offset = y[None, :, None] - gt_center_y[:, None, :]
@@ -288,12 +239,12 @@ class GenTargets(nn.Module):
         mask_pos = mask_gt & mask_lv & mask_center  #
 
         area[~mask_pos] = 99999999
-        area_min_index = torch.min(area, dim = -1)[1]
+        area_min_index = torch.min(area, dim = -1)[1]  # area minval index
         reg_target = offset[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim=-1), 1)]
         reg_target = torch.reshape(reg_target, (batch, -1, 4))
 
-        classes = torch.broadcast_tensors(labels[:, None, :], area.long())[0]
-        cls_target = classes[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim= -1), 1)]
+        labels = torch.broadcast_tensors(labels[:, None, :], area.long())[0]
+        cls_target = labels[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim= -1), 1)]
         cls_target = torch.reshape(cls_target, (batch, -1, 1))
 
         left_right_min = torch.min(reg_target[..., 0], reg_target[..., 2])  # [batch_size,h*w]
@@ -307,7 +258,8 @@ class GenTargets(nn.Module):
         assert center_target.shape == (batch, hw, 1)
 
         mask_pos_2 = mask_pos.long().sum(dim = -1)
-        mask_pos_2 = mask_pos_2 >= 1
+
+        mask_pos_2 = mask_pos_2 >=1
         assert mask_pos_2.shape == (batch, hw)
         cls_target[~mask_pos_2] = 0
         center_target[~mask_pos_2] = -1

@@ -64,6 +64,7 @@ class FCOSHead(nn.Module):
             cls_scores_post.append(cls_scores_b[nms_ind])
             cls_classes_port.append(cls_classes_b[nms_ind])
             boxes_post.append(boxes_b[nms_ind])
+            # print(f'{cls_scores_post=}\n{cls_classes_port}\n{boxes_post}')
         scores, classes, boxes = torch.stack(cls_scores_post, dim=0), torch.stack(cls_classes_port, dim=0), torch.stack(boxes_post, dim=0)
         return scores, classes, boxes
 

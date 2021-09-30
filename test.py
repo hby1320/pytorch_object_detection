@@ -146,7 +146,7 @@ def evaluate(model: nn.Module,
              amp_enable: bool,
              ddp_enable: bool,
              device: torch.device,
-             vialder):
+             ):
     score_threshold = 0.05
     nms_iou_threshold = 0.6
     max_detection_boxes_num = 1000
@@ -190,37 +190,49 @@ def evaluate(model: nn.Module,
             inference_time += time.time() - start_time
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
-    all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5,
-                        len(vialder.CLASSES_NAME))
+    all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 20)
+    CLASSES_NAME = (
+        "__background__ ", "aeroplane", "bicycle", "bird", "boat",
+        "bottle", "bus", "car", "cat", "chair",
+        "cow", "diningtable", "dog", "horse", "motorbike",
+        "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
 
     print(f'all classes AP=====>\n')
     for key, value in all_AP.items():
-        print(f'ap for {vialder.id2name[int(key)]} is {value}')
+        # print(f'ap for {vialder.id2name[int(key)]} is {value}')
+        print(f'ap for {CLASSES_NAME[int(key)]} is {value}')
     mAP = 0.
     for class_id, class_mAP in all_AP.items():
         mAP += float(class_mAP)
-    mAP /= (len(vialder.CLASSES_NAME) - 1)
+    mAP /= (len(CLASSES_NAME) - 1)
     print(f'mAP=====>{mAP:.3f}\n {inference_time=}')
 
 
 if __name__ == '__main__':
-    from dataset.voc import VOCDataset
     from torch.utils.data import DataLoader
-    from model.od.Mc_Fcos import MC_FCOS
-
+    from utill.utills import voc_collect
+    from dataset.pascalvoc import PascalVoc
+    from torchvision.transforms import transforms
+    data_transform = transforms.Compose([
+        transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
     batch_size = 1
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-
-    voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
+    voc_07_trainval = PascalVoc(root ="./data/voc/", year = "2007", image_set = "test", download = False,transforms=data_transform)
+    #voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
+    #valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
+    #                             collate_fn=voc_07_trainval.collate_fn)
     valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
-                                 collate_fn=voc_07_trainval.collate_fn)
+                              collate_fn=voc_collect)
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
     model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
     # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
-    # model.load_state_dict(torch.load('./checkpoint/FCOS_512_50_test_best_loss.pth'))
-    model.load_state_dict(torch.load('./checkpoint/proposed_anchor_fix_50.pth'))
-    evaluate(model, valid_dataloder, False, False, device, voc_07_trainval)
+    # model.load_state_dict(torch.load('./checkpoint/FCOS_512_test_30.pth'))
+    model.load_state_dict(torch.load('./checkpoint/proposed_50.pth'))
+    evaluate(model, valid_dataloder, False, False, device)

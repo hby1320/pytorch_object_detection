@@ -18,19 +18,19 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 30
-batch_size = 20
+EPOCH = 50
+batch_size = 24
 
-LR_INIT = 2e-3
+LR_INIT = 1e-3
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
-mode = 'FCOS'
-# mode = 'proposed'
+# mode = 'FCOS'
+mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_512_test'
 else:
-    model_name = 'proposed_gn'
+    model_name = 'proposed-lr'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -48,6 +48,11 @@ if __name__ == '__main__':
         transforms.RandomSizedCrop(512)
 
     ])
+
+    # data_transform1 = transforms.Compose([
+    #     transforms.Resize((512, 512)),
+    #     transforms.ToTensor()])
+
     # DDP setting
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -72,6 +77,10 @@ if __name__ == '__main__':
 
     voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
                              transforms = data_transform)
+
+    # voc_07_test = PascalVoc(root="./data/voc/", year="2007", image_set="test", download=False,
+    #                          transforms=data_transform1)
+
     # voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
     # voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
@@ -89,14 +98,15 @@ if __name__ == '__main__':
         #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
         train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
                                      collate_fn = voc_collect,  pin_memory= True)
-        # valid_dataloder = DataLoader(voc_07_trainval, batch_size = 1, num_workers = 4,
-        #                              collate_fn = voc_07_trainval.collate_fn)
+        # valid_dataloder = DataLoader(voc_07_test, batch_size = batch_size, num_workers = 4,
+        #                              collate_fn = voc_collect,  pin_memory= True)
     if mode == 'FCOS':
         model = FCOS([2048, 1024, 512], 20, 256).to(device)
         # gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
         #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
+        #
     elif mode =='proposed':
         model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
@@ -124,7 +134,7 @@ if __name__ == '__main__':
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
 
     scaler = torch.cuda.amp.GradScaler(enabled = amp_enabled)
-    criterion = Loss(mode='giou')  # 'iou'
+    criterion = Loss(mode='iou')  # 'iou'
 
 
     nb = len(train_dataloder)
@@ -201,7 +211,7 @@ if __name__ == '__main__':
 
             s = (f'{mem:10s} {losses[0].mean():10.4g} {losses[1].mean():10.4g} {losses[2].mean():10.4g} {losses[-1].mean():10.4g}')
             pbar.set_description(s)
-            GLOBAL_STEPS += 1
+            # GLOBAL_STEPS += 1
         # if epoch > swa_start:
         #     swa_model.update_parameters(model)
         #     swa_scheduler.step()
@@ -210,6 +220,8 @@ if __name__ == '__main__':
         #     scheduler.step()
 
             scheduler.step()
+
+            # evaluate(model, valid_dataloder, True, False, device)
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
@@ -217,7 +229,7 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
             best_loss = loss
 
-        if epoch >= EPOCH-5:
+        if epoch >= EPOCH-10:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
 
     if writer is not None:

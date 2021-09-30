@@ -5,8 +5,8 @@ from typing import List
 from torchinfo import summary
 
 
-
 def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
+
     col_names = ("input_size", "output_size", "num_params", "kernel_size", "mult_adds")
     img = torch.rand(batch, ch, width, hight).to(device)
     summary(model, img.size(), None, None, col_names, depth = depth, verbose= 1)
@@ -53,25 +53,29 @@ def shift_xy(shape, stride, anchor):
     return all_anchor
 
 
-def coords_origin_fcos(feature, strides):  # 원본 FCOS의 Location과 동일
+def coords_origin_fcos(feature: torch.Tensor, strides: List[int]) -> torch.Tensor:  # 원본 FCOS의 Location과 동일
+    """
+    :param feature:
+    :param strides:
+    :return:
+    """
+    h, w = feature.shape[1:3]  # [N, H, W, C] -> H,W
 
-    h, w = feature.shape[1:3]  # b,h,w,c 중 h,c
-
-    shifts_x = torch.arange(0, w * strides, strides, dtype = torch.float32)
-    shifts_y = torch.arange(0, h * strides, strides, dtype = torch.float32)
+    shifts_x = torch.arange(0, w * strides, strides, dtype=torch.float32)  # stride 만큼 간격
+    shifts_y = torch.arange(0, h * strides, strides, dtype=torch.float32)
 
     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
-    shift_x = torch.reshape(shift_x, [-1])
-    shift_y = torch.reshape(shift_y, [-1])
-    coords = torch.stack([shift_x, shift_y], -1) + strides // 2
+    shift_x = torch.reshape(shift_x, [-1])  # Number of pixel  -> [H*W]
+    shift_y = torch.reshape(shift_y, [-1])  # Number of pixel  -> [H*W]
+    coords = torch.stack([shift_x, shift_y], dim=-1) + strides // 2  # Number of pixel  -> [H*W]
     return coords
 
 
-def voc_collect(samples):
-    imgs = [sample['img'] for sample in samples]
+def voc_collect(samples: torch.Tensor):
+    images = [sample['img'] for sample in samples]
     targets = [sample['targets'] for sample in samples]
     lables = [sample['lables'] for sample in samples]
-    padded_imgs = torch.nn.utils.rnn.pad_sequence(imgs, batch_first=True)
+    padded_imgs = torch.nn.utils.rnn.pad_sequence(images, batch_first=True)
     padded_targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True)
     padded_tlables = torch.nn.utils.rnn.pad_sequence(lables, batch_first=True)
 
@@ -249,27 +253,3 @@ class DataEncoder:
                 break
             order = order[ids + 1]
         return torch.LongTensor(keep)
-
-
-# # 평균, 분산 계산 sorce (Nomalize 용)
-# import os
-# import torch
-# from torchvision import datasets, transforms
-# from torch.utils.data.dataset import Dataset
-# from tqdm.notebook import tqdm
-# from time import time
-# N_CHANNELS = 1
-# dataset = datasets.MNIST("data", download=True, train=True, transform=transforms.ToTensor())
-# full_loader = torch.utils.data.DataLoader(dataset, shuffle=False, num_workers=os.cpu_count())
-# before = time()
-# mean = torch.zeros(1)
-# std = torch.zeros(1)
-# print('==> Computing mean and std..')
-# for inputs, _labels in tqdm(full_loader):
-#     for i in range(N_CHANNELS):
-#         mean[i] += inputs[:,i,:,:].mean()
-#         std[i] += inputs[:,i,:,:].std()
-#         mean.div_(len(dataset))
-#         std.div_(len(dataset))
-#         print(mean, std)
-#         print("time elapsed: ", time()-before)
