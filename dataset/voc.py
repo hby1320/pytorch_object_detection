@@ -147,7 +147,8 @@ class VOCDataset(torch.utils.data.Dataset):
         max_num = 0
         for i in range(batch_size):
             n = boxes_list[i].shape[0]
-            if n > max_num: max_num = n
+            if n > max_num:
+                max_num = n
         for i in range(batch_size):
             pad_boxes_list.append(
                 torch.nn.functional.pad(boxes_list[i], (0, 0, 0, max_num - boxes_list[i].shape[0]), value=-1))
