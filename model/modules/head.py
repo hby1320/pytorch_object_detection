@@ -6,6 +6,41 @@ from utill.utills import coords_origin_fcos
 from typing import List
 
 
+def reshape_cat_out(inputs:torch.Tensor, strides: List[int]) -> torch.Tensor:
+    '''
+    Args
+    inputs: list contains five [batch_size,c,_h,_w]
+    Returns
+    out [batch_size,sum(_h*_w),c]
+    coords [sum(_h*_w),2]
+    '''
+
+    batch_size = inputs[0].shape[0]
+    c = inputs[0].shape[1]
+
+    out = []
+    coords = []
+    for pred, stride in zip(inputs, strides):
+        pred = pred.permute(0, 2, 3, 1)
+        coord = coords_origin_fcos(pred, stride).to(device=pred.device)
+        pred = torch.reshape(pred, [batch_size, -1, c]) # n h*w c
+        out.append(pred)
+        coords.append(coord)
+    return torch.cat(out, dim=1), torch.cat(coords, dim=0)
+
+
+def _coords2boxes(coords, offsets):
+    '''
+    Args
+    coords [sum(_h*_w),2]
+    offsets [batch_size,sum(_h*_w),4] ltrb
+    '''
+    x1y1 = coords[None, :, :] - offsets[..., :2]
+    x2y2 = coords[None, :, :] + offsets[..., 2:]  # [batch_size,sum(_h*_w),2]
+    boxes = torch.cat([x1y1, x2y2], dim=-1)  # [batch_size,sum(_h*_w),4]
+    return boxes
+
+
 class FCOSHead(nn.Module):
     def __init__(self, score_threshold: float,
                  nms_threshold: float,
@@ -18,9 +53,9 @@ class FCOSHead(nn.Module):
         self.strides = strides
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        cls_logits, coords = self._reshape_cat_out(x[0], self.strides)
-        cen_logits, _ = self._reshape_cat_out(x[1], self.strides)
-        reg_preds, _ = self._reshape_cat_out(x[2], self.strides)
+        cls_logits, coords = reshape_cat_out(x[0], self.strides)
+        cen_logits, _ = reshape_cat_out(x[1], self.strides)
+        reg_preds, _ = reshape_cat_out(x[2], self.strides)
 
         cls_preds = torch.sigmoid(cls_logits)  # 0~1 Nomalize
         cen_preds = torch.sigmoid(cen_logits)  # 0~1 Nomalize
@@ -31,7 +66,7 @@ class FCOSHead(nn.Module):
         cls_score = torch.sqrt(cls_score * (cen_preds.squeeze(dim = -1)))
         cls_classes = cls_classes + 1
 
-        boxes = self._coords2boxes(coords, reg_preds)
+        boxes = _coords2boxes(coords, reg_preds)
 
         # select top-k
         max_num = min(self.max_box, cls_score.shape[-1])
@@ -49,6 +84,7 @@ class FCOSHead(nn.Module):
         assert boxes_topk.shape[-1] == 4
         return self.post_process([cls_scores_topk, cls_classes_topk, boxes_topk])
 
+
     def post_process(self, preds_topk:List[torch.Tensor]):
         cls_scores_post = []
         cls_classes_port = []
@@ -65,6 +101,7 @@ class FCOSHead(nn.Module):
             cls_classes_port.append(cls_classes_b[nms_ind])
             boxes_post.append(boxes_b[nms_ind])
             # print(f'{cls_scores_post=}\n{cls_classes_port}\n{boxes_post}')
+            # print(cls_scores_post)
         scores, classes, boxes = torch.stack(cls_scores_post, dim=0), torch.stack(cls_classes_port, dim=0), torch.stack(boxes_post, dim=0)
         return scores, classes, boxes
 
@@ -115,42 +152,6 @@ class FCOSHead(nn.Module):
     #             break
     #         order = order[idx + 1]
     #     return torch.LongTensor(keep)
-
-
-    def _coords2boxes(self, coords, offsets):
-        '''
-        Args
-        coords [sum(_h*_w),2]
-        offsets [batch_size,sum(_h*_w),4] ltrb
-        '''
-        x1y1 = coords[None, :, :] - offsets[..., :2]
-        x2y2 = coords[None, :, :] + offsets[..., 2:]  # [batch_size,sum(_h*_w),2]
-        boxes = torch.cat([x1y1, x2y2], dim=-1)  # [batch_size,sum(_h*_w),4]
-        return boxes
-
-
-    def _reshape_cat_out(self, inputs, strides):
-
-        '''
-        Args
-        inputs: list contains five [batch_size,c,_h,_w]
-        Returns
-        out [batch_size,sum(_h*_w),c]
-        coords [sum(_h*_w),2]
-        '''
-
-        batch_size = inputs[0].shape[0]
-        c = inputs[0].shape[1]
-
-        out = []
-        coords = []
-        for pred, stride in zip(inputs, strides):
-            pred = pred.permute(0, 2, 3, 1)
-            coord = coords_origin_fcos(pred, stride).to(device=pred.device)
-            pred = torch.reshape(pred, [batch_size, -1, c]) # n h*w c
-            out.append(pred)
-            coords.append(coord)
-        return torch.cat(out, dim=1), torch.cat(coords, dim=0)
 
 
 class ClipBoxes(nn.Module):
