@@ -147,7 +147,7 @@ class FCOSHead(nn.Module):
         for pred, stride in zip(inputs, strides):
             pred = pred.permute(0, 2, 3, 1)
             coord = coords_origin_fcos(pred, stride).to(device=pred.device)
-            pred = torch.reshape(pred, [batch_size, -1, c])
+            pred = torch.reshape(pred, [batch_size, -1, c]) # n h*w c
             out.append(pred)
             coords.append(coord)
         return torch.cat(out, dim=1), torch.cat(coords, dim=0)

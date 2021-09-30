@@ -4,9 +4,7 @@ import torch.nn as nn
 from utill.utills import model_info, coords_origin_fcos
 from model.backbone.resnet50 import ResNet50
 # from model.backbone.resnet import resnet50
-import torch.nn.functional as F
 from typing import List
-import numpy as np
 
 
 class FCOS(nn.Module):
@@ -15,8 +13,6 @@ class FCOS(nn.Module):
     Trainable params: 35,920,348
     Non-trainable params: 3,043,136
     Total mult-adds (G): 149.93
-
-
     Input size (MB): 3.158.07
     Forward/backward pass size (MB): 1198.24
     Params size (MB): 155.85
@@ -92,7 +88,7 @@ class FeaturePyramidNetwork(nn.Module):
 
 
 class HeadFCOS(nn.Module):
-    def __init__(self, feature:int, num_class: int, prior: float = 0.01):
+    def __init__(self, feature: int, num_class: int, prior: float = 0.01):
         super(HeadFCOS, self).__init__()
         self.class_num = num_class
         self.prior = prior
@@ -149,22 +145,14 @@ class ScaleExp(nn.Module):
         return torch.exp(x * self.scale)
 
 
-def init_conv_rand_nomal(module, std: int = 0.01):
-    if isinstance(module, nn.Conv2d):
-        nn.init.normal_(module.weight, std=std)
-
-        if module.bias is not None:
-            nn.init.constant_(module.bias, 0)
-
-
 class GenTargets(nn.Module):
-    def __init__(self, strides: List[int], limit_range: List[int]):
+    def __init__(self, strides: List[int], limit_range: List[List[int]]):
         super(GenTargets, self).__init__()
         self.stride = strides
         self.lim_range = limit_range
         assert len(strides) == len(limit_range)  # s와 범위 동일해야됨
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         cls_logit, center_logit, reg_logit = x[0]
         gt_box = x[1]
         labels = x[2]
@@ -218,12 +206,19 @@ class GenTargets(nn.Module):
         right_offset = gt_box[..., 2][:, None, :] - x[None, :, None]
         bottom_offset = gt_box[..., 3][:, None, :] - y[None, :, None]
         offset = torch.stack([left_offset, top_offset, right_offset, bottom_offset], dim=-1)
-        #torch.Size([20, 4096, 4, 4])
+
+        #  torch.Size([20, 4096, 4, 4])
         area = (offset[..., 0]+offset[..., 2]) * (offset[..., 1]+offset[..., 3])  # [Class, H*W, M]
         offset_min = torch.min(offset, dim=-1)[0]  # [Class, H*W, M]min[0] -> Value
         offset_max = torch.max(offset, dim=-1)[0]
+
         mask_gt = offset_min > 0  #음수일제 정답 아니기 때문에
         mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])  # 해당 특징맵 LV 이하 값 제거
+        offset_min = torch.min(offset, dim=-1)[0] ## [0] minValue
+        offset_max = torch.max(offset, dim=-1)[0] ## [0] Max
+
+        mask_gt = offset_min > 0
+        mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
 
         ratio = stride * sample_radio_ratio
         gt_center_x = (gt_box[..., 0] + gt_box[..., 2]) / 2  # 중심 생성
@@ -268,151 +263,6 @@ class GenTargets(nn.Module):
         return cls_target, center_target, reg_target
 
 
-class Loss(nn.Module):
-    def __init__(self, mode: str = 'giou'):
-        super(Loss, self).__init__()
-        self.mode = mode
-
-    def forward(self, input):
-        pred, target = input
-        cls_logit, cen_logit, reg_logit = pred
-        cls_target, cen_target, reg_target = target
-
-        mask_pos = (cen_target > -1).squeeze(dim=-1)  ## sqeeze dim 1 제거
-
-        cls_loss = self.compute_cls_loss(cls_logit, cls_target, mask_pos).mean()  #평균 이유 : 배치 당 로스
-        cnt_loss = self.compute_cnt_loss(cen_logit, cen_target, mask_pos).mean()
-        reg_loss = self.compute_reg_loss(reg_logit, reg_target, mask_pos, self.mode).mean()
-
-        total_loss = cls_loss + cnt_loss + reg_loss
-        return cls_loss, cnt_loss, reg_loss, total_loss
-
-    def compute_cls_loss(self, preds, target, mask):
-        batch_size = target.shape[0]
-        preds_reshape = []
-        class_num = preds[0].shape[1] # 20 ?
-        mask = mask.unsqueeze(dim = -1)   #  torch.Size([2, 4724, 1])
-        # mask=targets>-1#[batch_size,sum(_h*_w),1]
-        num_pos = torch.sum(mask, dim=[1, 2]).clamp_(min=1).float()  # [batch_size,]
-        for pred in preds:
-            pred = pred.permute(0, 2, 3, 1)
-            pred = torch.reshape(pred, [batch_size, -1, class_num])
-            preds_reshape.append(pred)
-        preds = torch.cat(preds_reshape, dim=1)  # [batch_size,sum(_h*_w),class_num]
-        assert preds.shape[:2] == target.shape[:2]
-        loss = []
-        for batch_index in range(batch_size):
-            pred_pos = preds[batch_index]  # [sum(_h*_w),class_num]
-            target_pos = target[batch_index]  # [sum(_h*_w),1]
-            target_pos = (torch.arange(1, class_num + 1, device = target_pos.device)[None, :] == target_pos).float()
-            # sparse--> one-hot
-            loss.append(self.focal_loss_from_logits(pred_pos, target_pos).view(1))
-        return torch.cat(loss, dim=0) / num_pos  # [batch_size,]
-
-    def compute_cnt_loss(self, preds, target, mask):
-
-        batch_size = target.shape[0]
-        c = target.shape[-1]
-        preds_reshape = []
-        mask = mask.unsqueeze(dim = -1)
-        # mask= target>-1#[batch_size,sum(_h*_w),1]
-        num_pos = torch.sum(mask, dim = [1, 2]).clamp_(min = 1).float()  # [batch_size,]
-        for pred in preds:
-            pred = pred.permute(0, 2, 3, 1)
-            pred = torch.reshape(pred, [batch_size, -1, c])
-            preds_reshape.append(pred)
-        preds = torch.cat(preds_reshape, dim = 1) ## 차원 증가
-        assert preds.shape == target.shape  # [batch_size,sum(_h*_w),1]
-        loss = []
-        for batch_index in range(batch_size):
-            pred_pos = preds[batch_index][mask[batch_index]]  # [num_pos_b,]
-            target_pos = target[batch_index][mask[batch_index]]  # [num_pos_b,]
-            assert len(pred_pos.shape) == 1
-            loss.append(nn.functional.binary_cross_entropy_with_logits(input=pred_pos,target=target_pos,reduction='sum').view(1))
-            return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
-
-    def compute_reg_loss(self, preds, target, mask, mode='iou'):
-        batch_size = target.shape[0]
-        c = target.shape[-1]
-        preds_reshape = []
-        # mask=targets>-1#[batch_size,sum(_h*_w),4]
-        num_pos = torch.sum(mask, dim = 1).clamp_(min = 1).float()  # [batch_size,]
-        for pred in preds:
-            pred = pred.permute(0, 2, 3, 1)
-            pred = torch.reshape(pred, [batch_size, -1, c])
-            preds_reshape.append(pred)
-        preds = torch.cat(preds_reshape, dim=1)
-        assert preds.shape == target.shape  # [batch_size,sum(_h*_w),4]
-        loss = []
-        for batch_index in range(batch_size):
-            pred_pos = preds[batch_index][mask[batch_index]]  # [num_pos_b,4]
-            target_pos = target[batch_index][mask[batch_index]]  # [num_pos_b,4]
-            assert len(pred_pos.shape) == 2
-            if mode == 'iou':
-                loss.append(self.iou_loss(pred_pos, target_pos).view(1))
-            elif mode == 'giou':
-                loss.append(self.giou_loss(pred_pos, target_pos).view(1))
-            else:
-                raise NotImplementedError("reg loss only implemented ['iou','giou']")
-        return torch.cat(loss, dim = 0) / num_pos  # [batch_size,]
-
-    def iou_loss(self, preds, targets):
-
-        '''
-        Args:
-        preds: [n,4] ltrb
-        targets: [n,4]
-        '''
-
-        lt = torch.min(preds[:, :2], targets[:, :2])
-        rb = torch.min(preds[:, 2:], targets[:, 2:])
-        wh = (rb + lt).clamp(min=0)
-        overlap = wh[:, 0] * wh[:, 1]  # [n]
-        area1 = (preds[:, 2] + preds[:, 0]) * (preds[:, 3] + preds[:, 1])
-        area2 = (targets[:, 2] + targets[:, 0]) * (targets[:, 3] + targets[:, 1])
-        iou = overlap / (area1 + area2 - overlap)
-        loss = -iou.clamp(min=1e-6).log()
-        return loss.sum()
-
-    def giou_loss(self, preds, targets):
-        '''
-        Args:
-        preds: [n,4] ltrb
-        targets: [n,4]
-        '''
-        lt_min = torch.min(preds[:, :2], targets[:, :2])
-        rb_min = torch.min(preds[:, 2:], targets[:, 2:])
-        wh_min = (rb_min + lt_min).clamp(min=0)
-        overlap = wh_min[:, 0] * wh_min[:, 1]  # [n]
-        area1 = (preds[:, 2] + preds[:, 0]) * (preds[:, 3] + preds[:, 1])
-        area2 = (targets[:, 2] + targets[:, 0]) * (targets[:, 3] + targets[:, 1])
-        union = (area1 + area2 - overlap)
-        iou = overlap / union
-
-        lt_max = torch.max(preds[:, :2], targets[:, :2])
-        rb_max = torch.max(preds[:, 2:], targets[:, 2:])
-        wh_max = (rb_max + lt_max).clamp(0)
-        G_area = wh_max[:, 0] * wh_max[:, 1]  # [n]
-
-        giou = iou - (G_area - union) / G_area.clamp(1e-10)
-        loss = 1. - giou
-        return loss.sum()
-
-    def focal_loss_from_logits(self, preds, targets, gamma=2.0, alpha=0.25):
-        '''
-        Args:
-        preds: [n,class_num]
-        targets: [n,class_num]
-        '''
-
-        preds = preds.sigmoid()
-        preds = torch.clip(preds, min=0.000005, max=0.99999999995)
-        pt = preds * targets + (1.0 - preds) * (1.0 - targets)
-        w = alpha * targets + (1.0 - alpha) * (1.0 - targets)
-        loss = -w * torch.pow((1.0 - pt), gamma) * pt.log()
-        return loss.sum()
-
-
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FCOS(in_channel=[2048,1024,512], num_class = 20, feature=256).to(device)
@@ -420,9 +270,9 @@ if __name__ == '__main__':
     # tns = torch.rand(1, 3, 512, 512).to(device)
     model_info(model, 1, 3, 512, 512, device)
     # from torch.utils.tensorboard import SummaryWriter
-    # import os
-    #
-    # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'fcos'))
-    #
-    # writer.add_graph(model, tns)
-    # writer.close()
+    # # import os
+    # #
+    # # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'fcos'))
+    # #
+    # # writer.add_graph(model, tns)
+    # # writer.close()

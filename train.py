@@ -6,7 +6,8 @@ from tqdm import tqdm
 import torch
 from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
-from model.od.Fcos import FCOS, GenTargets, Loss
+from model.od.Fcos import FCOS, GenTargets
+from model.loss import FCOSLoss
 from model.od.proposed import FRFCOS
 from utill.utills import model_info, PolyLR, voc_collect
 from torch.optim import SGD, Adam
@@ -17,6 +18,7 @@ from torchvision.transforms import transforms
 import random
 from test import evaluate
 from data.augment import Transforms
+
 
 EPOCH = 50
 batch_size = 24
@@ -46,7 +48,6 @@ if __name__ == '__main__':
         transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
         transforms.RandomRotation(degrees=10),
         transforms.RandomSizedCrop(512)
-
     ])
 
     # data_transform1 = transforms.Compose([
@@ -74,7 +75,7 @@ if __name__ == '__main__':
     #  1 Data loader
     voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
                              transforms = data_transform)
-
+    #
     voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
                              transforms = data_transform)
 
@@ -121,6 +122,7 @@ if __name__ == '__main__':
 
     if opt == 'SGD':
         optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
+
     elif opt == 'Adam':
         optimizer = Adam(model.parameters(), lr=LR_INIT)
 
@@ -134,7 +136,8 @@ if __name__ == '__main__':
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
 
     scaler = torch.cuda.amp.GradScaler(enabled = amp_enabled)
-    criterion = Loss(mode='iou')  # 'iou'
+    criterion = FCOSLoss(mode= 'giou')  # 'iou'
+
 
 
     nb = len(train_dataloder)
