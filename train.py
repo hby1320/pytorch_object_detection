@@ -19,7 +19,6 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-
 EPOCH = 50
 batch_size = 20
 
@@ -75,15 +74,15 @@ if __name__ == '__main__':
     #  1 Data loader
     voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
                              transforms = data_transform)
-
+    #
     voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
                              transforms = data_transform)
 
     # voc_07_test = PascalVoc(root="./data/voc/", year="2007", image_set="test", download=False,
     #                          transforms=data_transform1)
 
-    # voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
-    # voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
+    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
+    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
     print(len(voc_07_train+voc_12_train))
@@ -96,8 +95,7 @@ if __name__ == '__main__':
     else:
         sampler = False
         # train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
-        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0),
-        #                              pin_memory= True)
+        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
         train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
                                      collate_fn = voc_collect,  pin_memory= True)
         # valid_dataloder = DataLoader(voc_07_test, batch_size = batch_size, num_workers = 4,
@@ -171,7 +169,7 @@ if __name__ == '__main__':
 
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-            #
+
             # if GLOBAL_STEPS < WARMPUP_STEPS:
             #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
             #     for param in optimizer.param_groups:
@@ -186,6 +184,16 @@ if __name__ == '__main__':
             #     lr = LR_INIT * 0.01
             #     for param in optimizer.param_groups:
             #         param['lr'] = lr
+
+            if GLOBAL_STEPS == 20001:
+                lr = LR_INIT * 0.1
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
+
+            if GLOBAL_STEPS == 27001:
+                lr = LR_INIT * 0.01
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
 
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
@@ -224,7 +232,7 @@ if __name__ == '__main__':
         # else:
         #     scheduler.step()
 
-            scheduler.step()
+            # scheduler.step()
 
             # evaluate(model, valid_dataloder, True, False, device)
         # if epoch % 5 == 0:
