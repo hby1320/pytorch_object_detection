@@ -19,17 +19,17 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 50
-batch_size = 20
+EPOCH = 30
+batch_size = 24
 
-LR_INIT = 1e-2
+LR_INIT = 2e-3  # 0.0001
 MOMENTUM = 0.9
-WEIGHTDECAY = 0.0005
+WEIGHTDECAY = 0.0001
 
-# mode = 'FCOS'
-mode = 'proposed'
+mode = 'FCOS'
+# mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_512_test'
+    model_name = 'FCOS_512_org'
 else:
     model_name = 'proposed-lr2'
 opt = 'SGD'
@@ -81,10 +81,10 @@ if __name__ == '__main__':
     # voc_07_test = PascalVoc(root="./data/voc/", year="2007", image_set="test", download=False,
     #                          transforms=data_transform1)
 
-    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
-    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
+    # voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
+    # voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
-    # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+    voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
     print(len(voc_07_train+voc_12_train))
     if ddp_enabled:
         sampler = torch.utils.data.DistributedSampler(voc_07_train+voc_12_train)
@@ -170,20 +170,10 @@ if __name__ == '__main__':
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
 
-            # if GLOBAL_STEPS < WARMPUP_STEPS:
-            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
-            #
-            # if GLOBAL_STEPS == 20001:
-            #     lr = LR_INIT * 0.1
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
-            #
-            # if GLOBAL_STEPS == 27001:
-            #     lr = LR_INIT * 0.01
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
+            if GLOBAL_STEPS < WARMPUP_STEPS:
+                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
 
             if GLOBAL_STEPS == 20001:
                 lr = LR_INIT * 0.1
@@ -197,8 +187,6 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
-                # losses = model([imgs, targets, classes])
-
                 outputs = model(imgs)
                 target = gen_target([outputs, targets, classes])
                 losses = criterion([outputs, target])
@@ -224,7 +212,7 @@ if __name__ == '__main__':
 
             s = (f'{mem:10s} {losses[0].mean():10.4g} {losses[1].mean():10.4g} {losses[2].mean():10.4g} {losses[-1].mean():10.4g}')
             pbar.set_description(s)
-            # GLOBAL_STEPS += 1
+            GLOBAL_STEPS += 1
         # if epoch > swa_start:
         #     swa_model.update_parameters(model)
         #     swa_scheduler.step()
