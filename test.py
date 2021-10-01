@@ -234,5 +234,5 @@ if __name__ == '__main__':
     model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
     # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
     # model.load_state_dict(torch.load('./checkpoint/FCOS_512_test_30.pth'))
-    model.load_state_dict(torch.load('./checkpoint/proposed_50.pth'))
+    model.load_state_dict(torch.load('./checkpoint/proposed-lr2_50.pth'))
     evaluate(model, valid_dataloder, False, False, device)

@@ -149,8 +149,6 @@ class RefineModule(nn.Module):
         self.pw_conv4 = PointWiseConv(feature, feature_lv[2])
         self.pw_conv5 = PointWiseConv(feature, feature_lv[1])
         self.pw_conv6 = PointWiseConv(feature, feature_lv[0])
-        self.icsp1 = ICSPBlock(feature, feature)
-        self.icsp2 = ICSPBlock(feature, feature)
         self.tf1 = PointWiseConv(feature_lv[2], feature)
         self.tf2 = PointWiseConv(feature_lv[1], feature)
         self.tf3 = PointWiseConv(feature_lv[0], feature)
@@ -158,7 +156,6 @@ class RefineModule(nn.Module):
         self.act1 = nn.ReLU(True)
         self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
-        self.act4 = nn.ReLU(True)
         self.bn = nn.BatchNorm2d(feature)
         self.bn1 = nn.BatchNorm2d(feature_lv[2])
         self.bn2 = nn.BatchNorm2d(feature_lv[1])
@@ -172,6 +169,7 @@ class RefineModule(nn.Module):
         x3_down = self.down_sample1(x3)
         x = torch.cat([x, x3_down], dim=1)
         x = self.pw_conv2(x)
+
         # Refine
         x = self.act(self.bn(self.pw_conv3(x)))
         x_up = self.up_sample1(x)
@@ -204,9 +202,9 @@ class HeadFRFCOS(nn.Module):
 
         for i in range(4):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
+            # reg_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.BatchNorm2d(feature))
             cls_branch.append(nn.ReLU(True))
-
             reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
             # reg_branch.append(nn.GroupNorm(32, feature))
             reg_branch.append(nn.BatchNorm2d(feature))
@@ -247,13 +245,13 @@ class HeadFRFCOS(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
-    model_info(model, 1, 3, 512, 512, device, depth=5)
-    tns = torch.rand(1, 3, 512, 512).to(device)
+    model_info(model, 1, 3, 512, 512, device)
+    # tns = torch.rand(1, 3, 512, 512).to(device)
 
-    from torch.utils.tensorboard import SummaryWriter
-    import os
-    writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'proposed'))
-    #
-    writer.add_graph(model, tns)
-    writer.close()
+    # from torch.utils.tensorboard import SummaryWriter
+    # import os
+    # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'proposed'))
+    # #
+    # writer.add_graph(model, tns)
+    # writer.close()
 

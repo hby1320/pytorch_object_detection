@@ -30,7 +30,7 @@ def compute_cnt_loss(preds, target, mask):
     batch_size = target.shape[0]
     c = target.shape[-1]
     preds_reshape = []
-    mask = mask.unsqueeze(dim = -1)
+    mask = mask.unsqueeze(dim=-1)
     # mask= target>-1#[batch_size,sum(_h*_w),1]
     num_pos = torch.sum(mask, dim = [1, 2]).clamp_(min = 1).float()  # [batch_size,]
     for pred in preds:
@@ -47,7 +47,7 @@ def compute_cnt_loss(preds, target, mask):
         cnt_loss.append(binary_cross_entropy_with_logits(input=pred_pos,
                                                      target=target_pos,
                                                      reduction='sum').view(1))
-        return torch.cat(cnt_loss, dim = 0)/num_pos  # [batch_size,]
+    return torch.cat(cnt_loss, dim = 0)/num_pos  # [batch_size,]
 
 
 def compute_reg_loss(preds, target, mask, mode='iou'):

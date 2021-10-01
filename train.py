@@ -21,18 +21,18 @@ from data.augment import Transforms
 
 
 EPOCH = 50
-batch_size = 24
+batch_size = 20
 
-LR_INIT = 1e-3
+LR_INIT = 1e-2
 MOMENTUM = 0.9
-WEIGHTDECAY = 0.0001
+WEIGHTDECAY = 0.0005
 
 # mode = 'FCOS'
 mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_512_test'
 else:
-    model_name = 'proposed-lr'
+    model_name = 'proposed-lr2'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     #  1 Data loader
     voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
                              transforms = data_transform)
-    #
+
     voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
                              transforms = data_transform)
 
@@ -96,7 +96,8 @@ if __name__ == '__main__':
     else:
         sampler = False
         # train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
-        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
+        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0),
+        #                              pin_memory= True)
         train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
                                      collate_fn = voc_collect,  pin_memory= True)
         # valid_dataloder = DataLoader(voc_07_test, batch_size = batch_size, num_workers = 4,
@@ -107,7 +108,6 @@ if __name__ == '__main__':
         #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
-        #
     elif mode =='proposed':
         model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
@@ -139,8 +139,8 @@ if __name__ == '__main__':
     criterion = FCOSLoss(mode= 'giou')  # 'iou'
 
 
-
     nb = len(train_dataloder)
+
     start_epoch = 0
     prev_mAP = 0.0
     best_loss = 0
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-
+            #
             # if GLOBAL_STEPS < WARMPUP_STEPS:
             #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
             #     for param in optimizer.param_groups:
@@ -189,6 +189,8 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
+                # losses = model([imgs, targets, classes])
+
                 outputs = model(imgs)
                 target = gen_target([outputs, targets, classes])
                 losses = criterion([outputs, target])

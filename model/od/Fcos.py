@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from utill.utills import model_info, coords_origin_fcos
 from model.backbone.resnet50 import ResNet50
-# from model.backbone.resnet import resnet50
+
 from typing import List
 
 
@@ -20,7 +20,6 @@ class FCOS(nn.Module):
     def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
         super(FCOS, self).__init__()
         self.backbone = ResNet50(3)
-        # self.backbone = resnet50(pretrained=True, if_include_top=False)
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
         self.head = HeadFCOS(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
