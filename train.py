@@ -31,7 +31,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org'
 else:
-    model_name = 'proposed_icsp'
+    model_name = 'proposed_icsp_test'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
