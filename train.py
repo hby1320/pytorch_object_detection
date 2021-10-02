@@ -20,18 +20,18 @@ from test import evaluate
 from data.augment import Transforms
 
 EPOCH = 30
-batch_size = 24
+batch_size = 20
 
-LR_INIT = 2e-3  # 0.0001
+LR_INIT = 1e-2  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
-mode = 'FCOS'
-# mode = 'proposed'
+# mode = 'FCOS'
+mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_512_org'
+    model_name = 'FCOS_org'
 else:
-    model_name = 'proposed-lr2'
+    model_name = 'proposed_icsp'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -39,15 +39,15 @@ swa_enabled = False
 Transform = Transforms()
 
 if __name__ == '__main__':
-    data_transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomVerticalFlip(0.5),
-        transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
-        transforms.RandomRotation(degrees=10),
-        transforms.RandomSizedCrop(512)
-    ])
+    # data_transform = transforms.Compose([
+    #     transforms.Resize((512, 512)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    #     transforms.RandomVerticalFlip(0.5),
+    #     transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
+    #     transforms.RandomRotation(degrees=10),
+    #     transforms.RandomSizedCrop(512)
+    # ])
 
     # data_transform1 = transforms.Compose([
     #     transforms.Resize((512, 512)),
@@ -72,17 +72,17 @@ if __name__ == '__main__':
         device = torch.device('cpu')
 
     #  1 Data loader
-    voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
-                             transforms = data_transform)
+    # voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
+    #                          transforms = data_transform)
     #
-    voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
-                             transforms = data_transform)
+    # voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
+    #                          transforms = data_transform)
 
     # voc_07_test = PascalVoc(root="./data/voc/", year="2007", image_set="test", download=False,
     #                          transforms=data_transform1)
 
-    # voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
-    # voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
+    voc_07_train = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", False, True, Transform)
+    voc_12_train = VOCDataset('./data/voc/VOCdevkit/VOC2012', [512, 512], "trainval", False, True, Transform)
     # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "trainval", True, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
     print(len(voc_07_train+voc_12_train))
@@ -94,10 +94,10 @@ if __name__ == '__main__':
                                      num_workers = 4, pin_memory= pin_memory, collate_fn = voc_07_train.collate_fn)
     else:
         sampler = False
-        # train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
-        #                              collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
-        train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
-                                     collate_fn = voc_collect,  pin_memory= True)
+        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
+                                     collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
+        # train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
+        #                              collate_fn = voc_collect,  pin_memory= True)
         # valid_dataloder = DataLoader(voc_07_test, batch_size = batch_size, num_workers = 4,
         #                              collate_fn = voc_collect,  pin_memory= True)
     if mode == 'FCOS':
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
     #                      last_epoch=-1,
     #                      verbose=False)
-    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     # swa_start = 5
     # scheduler = CosineAnnealingLR(optimizer, T_max=len(train_dataloder))
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)

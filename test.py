@@ -261,9 +261,8 @@ if __name__ == '__main__':
     # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
     #                           collate_fn=voc_collect)
 
-    # model = FCOS([2048, 1024, 512], 20, 256).to(device)
-    model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
-    # model = MC_FCOS([512, 1024, 2048], 20, 256).to(device)
-    # model.load_state_dict(torch.load('./checkpoint/FCOS_512_test_30.pth'))
-    model.load_state_dict(torch.load('./checkpoint/proposed-lr2_50.pth'))
+    model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    # model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+    model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
+    # model.load_state_dict(torch.load('./checkpoint/proposed-lr2_50.pth'))
     evaluate(model, valid_dataloder, False, False, device)

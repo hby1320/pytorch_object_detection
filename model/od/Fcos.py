@@ -9,13 +9,15 @@ from typing import List
 
 class FCOS(nn.Module):
     """
-    Total params: 38,963,484
-    Trainable params: 35,920,348
-    Non-trainable params: 3,043,136
-    Total mult-adds (G): 149.93
-    Input size (MB): 3.158.07
-    Forward/backward pass size (MB): 1198.24
-    Params size (MB): 155.85
+    Total params: 30,976,860
+    Trainable params: 30,701,340
+    Non-trainable params: 275,520
+    Total mult-adds (G): 51.14
+
+    Input size (MB): 3.15
+    Forward/backward pass size (MB): 1086.27
+    Params size (MB): 123.91
+    Estimated Total Size (MB): 1213.32
     """
     def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
         super(FCOS, self).__init__()

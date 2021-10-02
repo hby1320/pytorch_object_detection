@@ -11,14 +11,16 @@ import math
 
 class FRFCOS(nn.Module):
     """
-    Total params: 33,157,276
-    Trainable params: 32,862,812
-    Non-trainable params: 294,464
-    Total mult-adds (G): 39.17
-    Input size (MB): 3.154
-    Forward/backward pass size (MB): 1087.0
-    Params size (MB): 132.63
+    Total params: 36,038,972
+    Trainable params: 35,742,460
+    Non-trainable params: 296,512
+    Total mult-adds (G): 52.06
+    Input size (MB): 3.15
+    Forward/backward pass size (MB): 1091.28
+    Params size (MB): 144.16
+    Estimated Total Size (MB): 1238.58
     """
+
     def __init__(self, feature_map: List[int],
                  feature_lv: List[int],
                  num_classes: int,
@@ -70,6 +72,7 @@ class ICSPFPN(nn.Module):
         self.Up_sample1 = nn.Upsample(scale_factor = 2)
         self.Up_sample2 = nn.Upsample(scale_factor = 2)
     # [512, 1024, 2048], [128, 256, 512]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1, x2, x3 = x
         x3 = self.act(self.bn(self.conv1(x3)))  # 1024 16 16
@@ -84,21 +87,22 @@ class ICSPFPN(nn.Module):
         p7 = self.icsp_blcok3(p6_1)  #128 64 64 @
         return p5, p6, p7
 
+
 class ICSPBlock(nn.Module):
     def __init__(self, in_ch:int, out_ch:int, beta:int =2, alpha:int = 4):
         super(ICSPBlock, self).__init__()
-
         self.pw_conv1 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
         self.pw_conv2 = PointWiseConv(in_channel=in_ch//2, out_channel=in_ch)
         self.pw_conv3 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
-        self.pw_conv4 = PointWiseConv(in_channel=in_ch//2, out_channel=in_ch//2, bs=True)
+        self.pw_conv4 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
         self.pw_conv5 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
-        self.dw_conv1 = DepthWiseConv2d(in_ch, 3, 1)
-        self.se_block = SEBlock(in_ch, alpha=alpha)
+        self.pw_conv6 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
+        self.dw_conv1 = DepthWiseConv2d(in_ch//2, 5, 1)
+        self.se_block = SEBlock(in_ch//2, alpha=alpha)
         self.bn = nn.BatchNorm2d(in_ch//2)
-        self.bn1 = nn.BatchNorm2d(in_ch)
+        self.bn1 = nn.BatchNorm2d(in_ch//2)
         self.bn2 = nn.BatchNorm2d(in_ch)
-        self.bn3 = nn.BatchNorm2d(in_ch//2)
+        self.bn3 = nn.BatchNorm2d(in_ch)
         self.bn4 = nn.BatchNorm2d(in_ch//2)
         self.act = nn.ReLU(True)
         self.act1 = nn.ReLU(True)
@@ -108,12 +112,13 @@ class ICSPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # [1, 512, 8, 8]
         x1 = self.act(self.bn(self.pw_conv1(x)))
-        x2 = self.act1(self.bn1(self.pw_conv2(x1)))
-        x2 = self.act2(self.bn2(self.dw_conv1(x2)))
+        x2 = self.act1(self.bn1(self.dw_conv1(x1)))
         x2 = self.se_block(x2)
-        x2 = self.act3(self.bn3(self.pw_conv3(x2)))
-        x1 = self.pw_conv4(x1)
-        x3 = torch.cat([x2,x1],dim=1)
+        x2 = self.act2(self.bn2(self.pw_conv2(x2)))
+        x2 = torch.add(x2, x)
+        x2 = self.pw_conv3(x2)
+        x3 = self.pw_conv4(x)
+        x3 = self.act3(self.bn3(torch.cat([x2, x3],dim=1)))
         x3 = self.act4(self.bn4(self.pw_conv5(x3)))
         return x3
 
@@ -145,6 +150,8 @@ class RefineModule(nn.Module):
         self.down_sample2 = nn.MaxPool2d(2, 2)
         self.pw_conv1 = PointWiseConv(feature_lv[2] + feature_lv[1], feature, bs=True)
         self.pw_conv2 = PointWiseConv(feature_lv[1] + feature_lv[0], feature, bs=True)
+        # self.conv1 = nn.Conv2d(feature_lv[2] + feature_lv[1], feature, bias=)
+        # self.conv2 = nn.Conv2d(feature_lv[1] + feature_lv[0], feature, bs=True)
         self.pw_conv3 = nn.Conv2d(feature, feature, 3, 1, 1)
         self.pw_conv4 = PointWiseConv(feature, feature_lv[2])
         self.pw_conv5 = PointWiseConv(feature, feature_lv[1])
