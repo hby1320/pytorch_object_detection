@@ -250,6 +250,8 @@ if __name__ == '__main__':
         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     batch_size = 1
+    check_point_path = f'./checkpoint/'
+    ddp_mode = False
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -263,6 +265,21 @@ if __name__ == '__main__':
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
     model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
-    # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
-    model.load_state_dict(torch.load('./checkpoint/proposed_icsp_50_44.pth'))
+    if ddp_mode:
+        from collections import OrderedDict
+        state_dict = torch.load(check_point_path)
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        # load params
+        model.load_state_dict(new_state_dict)
+    else:
+        model.load_state_dict(torch.load('./checkpoint/test_10.pth'))
+        # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
+    #
+    # original saved file with DataParallel
+
+    # create new OrderedDict that does not contain `module.`
+
     evaluate(model, valid_dataloder, False, False, device)

@@ -83,8 +83,8 @@ class FeaturePyramidNetwork(nn.Module):
         p3 = self.P3_c1(p3)
         p4 = self.P4_c1(p4)
         p5 = self.P5_c1(p5)
-        # p6 = self.P6_c1(p5)
-        # p7 = self.P7_c1(self.act(p6))
+        p6 = self.P6_c1(p5)
+        p7 = self.P7_c1(self.act(p6))
         return [p3, p4, p5]
 
 
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     model = FCOS(in_channel=[2048,1024,512], num_class = 20, feature=256).to(device)
     # a = torch.rand(1,3,512, 512).to(device)
     # tns = torch.rand(1, 3, 512, 512).to(device)
-    model_info(model, 1, 3, 512, 512, device)
+    model_info(model, 1, 3, 512, 512, device)  # flop51.26G  para0.03G
     # from torch.utils.tensorboard import SummaryWriter
     # # import os
     # #

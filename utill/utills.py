@@ -3,13 +3,15 @@ import torch.nn as nn
 import numpy as np
 from typing import List
 from torchinfo import summary
+from thop import profile
 
 
 def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
-
-    col_names = ("input_size", "output_size", "num_params", "kernel_size", "mult_adds")
+    col_names = ["input_size", "output_size", "num_params", "kernel_size", "mult_adds"]
     img = torch.rand(batch, ch, width, hight).to(device)
-    summary(model, img.size(), None, None, col_names, depth = depth, verbose= 1)
+    summary(model, img.size(), None, None, col_names=col_names, depth = depth, verbose= 1)
+    flop, para = profile(model, inputs=(img,))
+    print(f'flop{(flop/1e9):.2f}G  para{(para/1e9):.2f}G')
 
 
 def generate_anchor(base_size=16, ratios=None, scales=None):

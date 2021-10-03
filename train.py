@@ -31,7 +31,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org'
 else:
-    model_name = 'proposed_icsp_test'
+    model_name = 'test'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
     #                      last_epoch=-1,
     #                      verbose=False)
-    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     # swa_start = 5
     # scheduler = CosineAnnealingLR(optimizer, T_max=len(train_dataloder))
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
@@ -226,11 +226,11 @@ if __name__ == '__main__':
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
-        if loss > best_loss:
-            torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
-            best_loss = loss
+        # if loss > best_loss:
+        #     torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
+        #     best_loss = loss
 
-        if epoch >= EPOCH-10:
+        if epoch >= EPOCH-5:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
 
     if writer is not None:
