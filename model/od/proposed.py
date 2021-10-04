@@ -46,7 +46,7 @@ class FRFCOS(nn.Module):
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
         x1, x2, x3 = self.backbone(x)  # 512 * 64, 1024 * 32, 2048  * 16
         x = self.fpn([x1, x2, x3])  # p5, p6, p7 128 256 512
-        # x = self.refine(x)
+        x = self.refine(x)
         cls, cnt, reg = self.head(x)
         return [cls, cnt, reg]
 
@@ -57,9 +57,9 @@ class ICSPFPN(nn.Module):
         self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, bias=False)
         self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, bias=False)
         self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, bias=False)
-        self.icsp_blcok1 = ICSPBlock(feature, feature, 3, 2, 4)
-        self.icsp_blcok2 = ICSPBlock(feature, feature, 3, 2, 4)
-        self.icsp_blcok3 = ICSPBlock(feature, feature, 3, 2, 4)
+        self.icsp_blcok1 = ICSPBlock(feature, feature, 5, 3, 4)
+        self.icsp_blcok2 = ICSPBlock(feature, feature, 5, 3, 4)
+        self.icsp_blcok3 = ICSPBlock(feature, feature, 5, 3, 4)
         self.Up_sample1 = nn.Upsample(scale_factor=2)
         self.Up_sample2 = nn.Upsample(scale_factor=2)
         self.bn = nn.BatchNorm2d(feature)
@@ -157,7 +157,7 @@ class SEBlock(nn.Module):
         super(SEBlock, self).__init__()
         self.Gap = nn.AdaptiveAvgPool2d(1)
         self.pw_conv1 = PointWiseConv(in_channel=feature, out_channel=feature // alpha, bs=True)
-        self.act = nn.SiLU(True)
+        self.act = nn.ReLU(True)
         self.pw_conv2 = PointWiseConv(in_channel=feature // alpha, out_channel=feature, bs=True)
         self.sigmoid = nn.Sigmoid()
 

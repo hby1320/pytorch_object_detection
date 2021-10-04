@@ -251,7 +251,7 @@ if __name__ == '__main__':
     ])
     batch_size = 1
     check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
-    ddp_mode = True
+    ddp_mode = False
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -263,8 +263,8 @@ if __name__ == '__main__':
     # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
     #                           collate_fn=voc_collect)
 
-    model = FCOS([2048, 1024, 512], 20, 256).to(device)
-    # model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+    # model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
     if ddp_mode:
         from collections import OrderedDict
         state_dict = torch.load(check_point_path)
@@ -275,7 +275,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/bottle_30.pth'))
+        model.load_state_dict(torch.load('./checkpoint/proposed_test_50.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel

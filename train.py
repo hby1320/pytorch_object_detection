@@ -20,9 +20,9 @@ from test import evaluate
 from data.augment import Transforms
 
 EPOCH = 50
-batch_size = 64
+batch_size = 14
 
-LR_INIT = 1e-3  # 0.0001
+LR_INIT = 2e-3  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
@@ -31,10 +31,10 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_test'
 else:
-    model_name = 'proposed_refine'
+    model_name = 'proposed_test_2'
 opt = 'SGD'
 amp_enabled = True
-ddp_enabled = True
+ddp_enabled = False
 swa_enabled = False
 Transform = Transforms()
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
                                      num_workers = 4, pin_memory= pin_memory, collate_fn = voc_07_train.collate_fn)
     else:
         sampler = False
-        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 8,
+        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
                                      collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
         # train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
         #                              collate_fn = voc_collect,  pin_memory= True)
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
     elif mode =='proposed':
-        model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+        model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
 
@@ -191,7 +191,7 @@ if __name__ == '__main__':
                 target = gen_target([outputs, targets, classes])
                 losses = criterion([outputs, target])
                 loss = losses[-1]
-            scaler.scale(loss.mean()).backward()
+            scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
 
