@@ -34,7 +34,7 @@ class FRFCOS(nn.Module):
         self.head = HeadFRFCOS(feature, num_classes, 0.01)
         self.act1 = nn.ReLU(True)
         self.act2 = nn.ReLU(True)
-        self.act3= nn.ReLU(True)
+        self.act3 = nn.ReLU(True)
 
         def freeze_bn(module):
             if isinstance(module, nn.BatchNorm2d):
@@ -68,9 +68,6 @@ class ICSPFPN(nn.Module):
         self.icsp_blcok3 = ICSPBlock(feature, feature, 3, 2, 4)
         self.Up_sample1 = nn.Upsample(scale_factor = 2)
         self.Up_sample2 = nn.Upsample(scale_factor = 2)
-        #  test
-        # self.tf3 = nn.Conv2d(feature_lv[2], feature_lv[1], 1, 1, bias=True)
-        # self.tf4 = nn.Conv2d(feature_lv[0], feature_lv[1], 1, 1, bias=True)
     # [512, 1024, 2048], [128, 256, 512]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -85,30 +82,53 @@ class ICSPFPN(nn.Module):
         x1 = self.tf3(x1)  # 256 64 64
         p6_1 = torch.add(p6_1, x1)  # 256 64 64
         p7 = self.icsp_blcok3(p6_1)  #128 64 64 @
-        #  test
-        # p5 = self.tf3(p5)
-        # p7 = self.tf4(p7)
-        return p5, p6, p7
+        return [p5, p6, p7]
+
+
+class MCbottle(nn.Module):
+    def __init__(self, in_ch: int, out_ch: int, k: int = 2, beta:int = 2, alpha:int = 4):
+        super(MCbottle, self).__init__()
+        self.conv1_1 = PointWiseConv(in_channel=in_ch, out_channel=in_ch * beta)
+        self.conv1_2 = DepthWiseConv2d(in_ch * beta, k, 1)
+        self.conv1_3 = PointWiseConv(in_channel=in_ch * beta, out_channel=in_ch)
+        self.se_block = SEBlock(in_ch * beta, alpha=alpha)
+        self.bn = nn.BatchNorm2d(in_ch * beta)
+        self.bn1 = nn.BatchNorm2d(in_ch * beta)
+        self.bn2 = nn.BatchNorm2d(in_ch)
+        self.act = nn.ReLU(True)
+        self.act1 = nn.ReLU(True)
+        self.act2 = nn.ReLU(True)
+
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        x1 = self.act(self.bn(self.conv1_1(x)))
+        x2 = self.act1(self.bn1(self.conv1_2(x1)))
+        x2 = self.se_block(x2)
+        x2 = self.act2(self.bn2(self.conv1_3(x2)))
+        x2 = torch.add(x2, x)
+        return x2
+
 
 
 class ICSPBlock(nn.Module):
     def __init__(self, in_ch: int, out_ch: int, k: int = 2, beta:int = 2, alpha:int = 4):
         super(ICSPBlock, self).__init__()
-        self.pw_conv1 = PointWiseConv(in_channel=in_ch, out_channel=in_ch*beta)
-        self.pw_conv2 = PointWiseConv(in_channel=in_ch*beta, out_channel=in_ch)
+        # self.pw_conv1 = PointWiseConv(in_channel=in_ch, out_channel=in_ch*beta)
+        # self.pw_conv2 = PointWiseConv(in_channel=in_ch*beta, out_channel=in_ch)
+        self.bottle_1 = MCbottle(in_ch, in_ch, 3, 2, 4)
+        self.bottle_2 = MCbottle(in_ch, in_ch, 3, 2, 4)
         self.pw_conv3 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
         self.pw_conv4 = PointWiseConv(in_channel=in_ch, out_channel=in_ch//2)
         self.pw_conv5 = nn.Conv2d(in_ch, out_ch, 3, 1, 1,bias=False)
-        self.dw_conv1 = DepthWiseConv2d(in_ch*beta, k, 1)
-        self.se_block = SEBlock(in_ch*beta, alpha=alpha)
-        self.bn = nn.BatchNorm2d(in_ch*beta)
-        self.bn1 = nn.BatchNorm2d(in_ch*beta)
-        self.bn2 = nn.BatchNorm2d(in_ch)
+        # self.dw_conv1 = DepthWiseConv2d(in_ch*beta, k, 1)
+        # self.se_block = SEBlock(in_ch*beta, alpha=alpha)
+        # self.bn = nn.BatchNorm2d(in_ch*beta)
+        # self.bn1 = nn.BatchNorm2d(in_ch*beta)
+        # self.bn2 = nn.BatchNorm2d(in_ch)
         self.bn3 = nn.BatchNorm2d(in_ch)
         self.bn4 = nn.BatchNorm2d(out_ch)
-        self.act = nn.ReLU(True)
-        self.act1 = nn.ReLU(True)
-        self.act2 = nn.ReLU(True)
+        # self.act = nn.ReLU(True)
+        # self.act1 = nn.ReLU(True)
+        # self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
         self.act4 = nn.ReLU(True)
         # self.conv1 = nn.Conv2d(in_ch, in_ch*beta, 3, 1,1,bias=False)
@@ -116,11 +136,13 @@ class ICSPBlock(nn.Module):
         # self.act5 = nn.ReLU(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # [1, 512, 8, 8]
-        x1 = self.act(self.bn(self.pw_conv1(x)))
-        x2 = self.act1(self.bn1(self.dw_conv1(x1)))
-        x2 = self.se_block(x2)
-        x2 = self.act2(self.bn2(self.pw_conv2(x2)))
-        x2 = torch.add(x2, x)
+        # x1 = self.act(self.bn(self.pw_conv1(x)))
+        # x2 = self.act1(self.bn1(self.dw_conv1(x1)))
+        # x2 = self.se_block(x2)
+        # x2 = self.act2(self.bn2(self.pw_conv2(x2)))
+        # x2 = torch.add(x2, x)
+        x1 = self.bottle_1(x)
+        x2 = self.bottle_2(x)
         x2 = self.pw_conv3(x2)
         x3 = self.pw_conv4(x)
         x3 = self.act3(self.bn3(torch.cat([x2, x3], dim=1)))

@@ -19,22 +19,22 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 30
-batch_size = 20
+EPOCH = 50
+batch_size = 64
 
-LR_INIT = 1e-2  # 0.0001
+LR_INIT = 1e-3  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
 # mode = 'FCOS'
 mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_org'
+    model_name = 'FCOS_org_test'
 else:
-    model_name = 'test'
+    model_name = 'proposed_refine'
 opt = 'SGD'
 amp_enabled = True
-ddp_enabled = False
+ddp_enabled = True
 swa_enabled = False
 Transform = Transforms()
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
                                      num_workers = 4, pin_memory= pin_memory, collate_fn = voc_07_train.collate_fn)
     else:
         sampler = False
-        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
+        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 8,
                                      collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
         # train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
         #                              collate_fn = voc_collect,  pin_memory= True)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
 
     if ddp_enabled:
-        model = torch.nn.parallel.DistributedDataParallel(model)
+        model = torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if swa_enabled:
         swa_model = AveragedModel(model)
@@ -169,22 +169,22 @@ if __name__ == '__main__':
 
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-
-            if GLOBAL_STEPS < WARMPUP_STEPS:
-                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
-            if GLOBAL_STEPS == 20001:
-                lr = LR_INIT * 0.1
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
-            if GLOBAL_STEPS == 27001:
-                lr = LR_INIT * 0.01
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
+            #
+            # if GLOBAL_STEPS < WARMPUP_STEPS:
+            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 20001:
+            #     lr = LR_INIT * 0.1
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 27001:
+            #     lr = LR_INIT * 0.01
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
                 outputs = model(imgs)
@@ -197,7 +197,7 @@ if __name__ == '__main__':
 
             if ddp_enabled:
                 loss_list = [torch.zeros(1, device = device) for _ in range(world_size)]
-                torch.distributed.all_gather_multigpu([loss_list], [losses])
+                torch.distributed.all_gather_multigpu([loss_list], [loss])
                 if writer is not None:
                     for i, rank_loss in enumerate(loss_list):
                         writer.add_scalar(f'loss/training (rank{i})', rank_loss.item(), iters)
@@ -220,7 +220,7 @@ if __name__ == '__main__':
         # else:
         #     scheduler.step()
 
-            # scheduler.step()
+            scheduler.step()
 
             # evaluate(model, valid_dataloder, True, False, device)
         # if epoch % 5 == 0:

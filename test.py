@@ -250,21 +250,21 @@ if __name__ == '__main__':
         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     batch_size = 1
-    check_point_path = f'./checkpoint/'
-    ddp_mode = False
+    check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
+    ddp_mode = True
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
     # voc_07_trainval = PascalVoc(root ="./data/voc/", year = "2007", image_set = "test", download = False, transforms=data_transform)
     voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
-    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
+    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=8,
                                 collate_fn=voc_07_trainval.collate_fn)
     # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
     #                           collate_fn=voc_collect)
 
-    # model = FCOS([2048, 1024, 512], 20, 256).to(device)
-    model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
+    model = FCOS([2048, 1024, 512], 20, 256).to(device)
+    # model = FRFCOS([512, 1024, 2048], [128, 256, 512], 20, 256).to(device)
     if ddp_mode:
         from collections import OrderedDict
         state_dict = torch.load(check_point_path)
@@ -275,7 +275,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/test_10.pth'))
+        model.load_state_dict(torch.load('./checkpoint/bottle_30.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel
