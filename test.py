@@ -220,7 +220,7 @@ def evaluate(model: nn.Module,
             inference_time += time.time() - start_time
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
-    all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 20)
+    all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
     CLASSES_NAME = (
         "__background__ ", "aeroplane", "bicycle", "bird", "boat",
         "bottle", "bus", "car", "cat", "chair",
@@ -250,7 +250,7 @@ if __name__ == '__main__':
         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     batch_size = 1
-    check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
+    check_point_path = f'./checkpoint/proposed_test_2_50.pth'
     ddp_mode = False
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -258,7 +258,7 @@ if __name__ == '__main__':
         device = torch.device('cpu')
     # voc_07_trainval = PascalVoc(root ="./data/voc/", year = "2007", image_set = "test", download = False, transforms=data_transform)
     voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
-    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=8,
+    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
                                 collate_fn=voc_07_trainval.collate_fn)
     # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
     #                           collate_fn=voc_collect)
@@ -275,7 +275,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/proposed_test_50.pth'))
+        model.load_state_dict(torch.load('./checkpoint/ddptest_100.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel
