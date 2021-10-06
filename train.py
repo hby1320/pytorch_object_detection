@@ -20,18 +20,18 @@ from test import evaluate
 from data.augment import Transforms
 
 EPOCH = 50
-batch_size = 14
+batch_size = 16
 
-LR_INIT = 2e-3  # 0.0001
+LR_INIT = 1e-2  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
 # mode = 'FCOS'
 mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_org_test'
+    model_name = 'FCOS_org_test2'
 else:
-    model_name = 'proposed_test_2'
+    model_name = 'FRFCOS'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
     elif mode =='proposed':
-        model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
+        model = FRFCOS([512, 1024, 2048],  20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     #                      lr_lambda=lambda EPOCH: 0.95 ** EPOCH,
     #                      last_epoch=-1,
     #                      verbose=False)
-    scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
+    # scheduler = PolyLR(optimizer, len(train_dataloder) * EPOCH)
     # swa_start = 5
     # scheduler = CosineAnnealingLR(optimizer, T_max=len(train_dataloder))
     # swa_scheduler = SWALR(optimizer, swa_lr = 0.05)
@@ -170,20 +170,20 @@ if __name__ == '__main__':
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
             #
-            # if GLOBAL_STEPS < WARMPUP_STEPS:
-            #     lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
-            #
-            # if GLOBAL_STEPS == 20001:
-            #     lr = LR_INIT * 0.1
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
-            #
-            # if GLOBAL_STEPS == 27001:
-            #     lr = LR_INIT * 0.01
-            #     for param in optimizer.param_groups:
-            #         param['lr'] = lr
+            if GLOBAL_STEPS < WARMPUP_STEPS:
+                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
+
+            if GLOBAL_STEPS == 20001:
+                lr = LR_INIT * 0.1
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
+
+            if GLOBAL_STEPS == 27001:
+                lr = LR_INIT * 0.01
+                for param in optimizer.param_groups:
+                    param['lr'] = lr
             #
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
@@ -191,7 +191,7 @@ if __name__ == '__main__':
                 target = gen_target([outputs, targets, classes])
                 losses = criterion([outputs, target])
                 loss = losses[-1]
-            scaler.scale(loss).backward()
+            scaler.scale(loss.mean()).backward()
             scaler.step(optimizer)
             scaler.update()
 
@@ -220,7 +220,7 @@ if __name__ == '__main__':
         # else:
         #     scheduler.step()
 
-            scheduler.step()
+            # scheduler.step()
 
             # evaluate(model, valid_dataloder, True, False, device)
         # if epoch % 5 == 0:
