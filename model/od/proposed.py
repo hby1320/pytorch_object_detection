@@ -9,14 +9,17 @@ import numpy as np
 
 class FRFCOS(nn.Module):
     """
-    Total params: 36,038,972
-    Trainable params: 35,742,460
-    Non-trainable params: 296,512
-    Total mult-adds (G): 52.06
-    Input size (MB): 3.15
-    Forward/backward pass size (MB): 1091.28
-    Params size (MB): 144.16
-    Estimated Total Size (MB): 1238.58
+Total params: 38,465,372
+Trainable params: 38,154,524
+Non-trainable params: 310,848
+Total mult-adds (G): 49.14
+Input size (MB): 3.15
+Forward/backward pass size (MB): 1376.77
+Params size (MB): 153.86
+Estimated Total Size (MB): 1533.78
+
+    flop44.98G  para0.03G
+Total GFLOPs: 98.2822
     """
 
     def __init__(self, feature_map: List[int],
@@ -27,7 +30,7 @@ class FRFCOS(nn.Module):
         self.backbone = ResNet50(3)
         self.backbone_freeze = bn_freeze
         self.fpn = ICSPFPN(feature_map, feature)
-        self.refine = RefineModule(feature)
+        # self.refine = RefineModule(feature)
         self.head = HeadFRFCOS(feature, num_classes, 0.01)
 
         def freeze_bn(module: nn.Module):
@@ -43,10 +46,10 @@ class FRFCOS(nn.Module):
             self.backbone.freeze_stages(1)
             print(f"success frozen BN")
 
-    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
-        x1, x2, x3 = self.backbone(x)  # 512 * 64, 1024 * 32, 2048  * 16
-        x = self.fpn([x1, x2, x3])  # p5, p6, p7 128 256 512
-        x = self.refine(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.backbone(x)  # 512 * 64, 1024 * 32, 2048  * 16
+        x = self.fpn(x)  # p5, p6, p7 128 256 512
+        # x = self.refine(x)
         cls, cnt, reg = self.head(x)
         return [cls, cnt, reg]
 
@@ -57,33 +60,44 @@ class ICSPFPN(nn.Module):
         self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, bias=False)
         self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, bias=False)
         self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, bias=False)
-        self.icsp_blcok1 = ICSPBlock(feature, feature, 5, 3, 4)
-        self.icsp_blcok2 = ICSPBlock(feature, feature, 5, 3, 4)
-        self.icsp_blcok3 = ICSPBlock(feature, feature, 5, 3, 4)
+        self.icsp_blcok1 = ICSPBlock(feature, feature, 3, 2, 4)
+        self.icsp_blcok2 = ICSPBlock(feature, feature, 3, 2, 4)
+        self.icsp_blcok3 = ICSPBlock(feature, feature, 3, 2, 4)
+        self.icsp_blcok4 = ICSPBlock(feature, feature, 3, 2, 4)
+        self.icsp_blcok5 = ICSPBlock(feature, feature, 3, 2, 4)
         self.Up_sample1 = nn.Upsample(scale_factor=2)
         self.Up_sample2 = nn.Upsample(scale_factor=2)
-        self.bn = nn.BatchNorm2d(feature)
-        self.bn1 = nn.BatchNorm2d(feature)
-        self.bn2 = nn.BatchNorm2d(feature)
-        self.act = nn.ReLU(True)
-        self.act1 = nn.ReLU(True)
-        self.act2 = nn.ReLU(True)
+        self.down_sample1 = nn.MaxPool2d(2, 2)
+        self.down_sample2 = nn.MaxPool2d(2, 2)
+        # self.bn = nn.BatchNorm2d(feature)
+        # self.bn1 = nn.BatchNorm2d(feature)
+        # self.bn2 = nn.BatchNorm2d(feature)
+        # self.act = nn.ReLU(True)
+        # self.act1 = nn.ReLU(True)
+        # self.act2 = nn.ReLU(True)
 
     # [512, 1024, 2048], [128, 256, 512]
 
-    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1, x2, x3 = x
-        x3 = self.act(self.bn(self.tf1(x3)))  # 1024 16 16
-        p5 = self.icsp_blcok1(x3)  # 512 16 16  @
-        p5_1 = self.Up_sample1(p5)  # 512 32 32
-        x2 = self.act1(self.bn1(self.tf2(x2)))  # 512 32 32
-        p5_1 = torch.add(p5_1, x2)  # 512 32 32
-        p6 = self.icsp_blcok2(p5_1)  # 256 32 32   @
-        p6_1 = self.Up_sample2(p6)  # 256 64 64
-        x1 = self.act2(self.bn2(self.tf3(x1)))  # 256 64 64
-        p6_1 = torch.add(p6_1, x1)  # 256 64 64
-        p7 = self.icsp_blcok3(p6_1)  # 128 64 64 @
-        return [p5, p6, p7]
+        x3 = self.tf1(x3)  # 1024 16 16
+        p3 = self.icsp_blcok1(x3)  # 512 16 16  @
+        p3_1 = self.Up_sample1(p3)  # 512 32 32
+        x2 = self.tf2(x2)  # 512 32 32
+        p4_1 = torch.add(p3_1, x2)  # 512 32 32
+        p4 = self.icsp_blcok2(p4_1)  # 256 32 32   @
+        p5_1 = self.Up_sample2(p4)  # 256 64 64
+        x1 = self.tf3(x1)  # 256 64 64
+        p5_1 = torch.add(p5_1, x1)  # 256 64 64
+        p5 = self.icsp_blcok3(p5_1)  # 128 64 64 @
+
+        p5_2 = self.down_sample1(p5)
+        p4_2 = torch.add(p5_2, p4)
+        p4 = self.icsp_blcok4(p4_2)
+        p3_2 = self.down_sample2(p4)
+        p3 = torch.add(p3_2, p3)
+        p3 = self.icsp_blcok5(p3)
+        return p5, p4, p3
 
 
 class MCbottle(nn.Module):
@@ -96,17 +110,17 @@ class MCbottle(nn.Module):
         self.bn = nn.BatchNorm2d(in_ch * beta)
         self.bn1 = nn.BatchNorm2d(in_ch * beta)
         self.bn2 = nn.BatchNorm2d(out_ch)
-        self.act = nn.ReLU(True)
-        self.act1 = nn.ReLU(True)
-        self.act2 = nn.ReLU(True)
+        self.act = nn.SiLU(True)
+        self.act1 = nn.SiLU(True)
+        self.act2 = nn.SiLU(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = self.act(self.bn(self.conv1_1(x)))
-        x2 = self.act1(self.bn1(self.conv1_2(x1)))
-        x2 = self.se_block(x2)
-        x2 = self.act2(self.bn2(self.conv1_3(x2)))
-        x2 = torch.add(x2, x)
-        return x2
+        x1 = self.act1(self.bn1(self.conv1_2(x1)))
+        x1 = self.se_block(x1)
+        x1 = self.act2(self.bn2(self.conv1_3(x1)))
+        x1 = torch.add(x1, x)
+        return x1
 
 
 class ICSPBlock(nn.Module):
@@ -116,7 +130,7 @@ class ICSPBlock(nn.Module):
         # self.pw_conv2 = PointWiseConv(in_channel=in_ch*beta, out_channel=in_ch)
         self.bottle_1 = MCbottle(in_ch, in_ch, k, beta, alpha)
         self.bottle_2 = MCbottle(in_ch, in_ch, k, beta, alpha)
-        self.bottle_3 = MCbottle(in_ch, in_ch, k, beta, alpha)
+        # self.bottle_3 = MCbottle(in_ch, in_ch, k, beta, alpha)
         self.pw_conv3 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
         self.pw_conv4 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
         self.pw_conv5 = nn.Conv2d(in_ch, out_ch, 3, 1, 1, bias=False)
@@ -144,7 +158,7 @@ class ICSPBlock(nn.Module):
         # x2 = torch.add(x2, x)
         x1 = self.bottle_1(x)
         x1 = self.bottle_2(x1)
-        x1 = self.bottle_3(x1)
+        # x1 = self.bottle_3(x1)
         x2 = self.pw_conv3(x1)
         x3 = self.pw_conv4(x)
         x3 = self.act3(self.bn3(torch.cat([x2, x3], dim=1)))
@@ -157,7 +171,7 @@ class SEBlock(nn.Module):
         super(SEBlock, self).__init__()
         self.Gap = nn.AdaptiveAvgPool2d(1)
         self.pw_conv1 = PointWiseConv(in_channel=feature, out_channel=feature // alpha, bs=True)
-        self.act = nn.ReLU(True)
+        self.act = nn.SiLU(True)
         self.pw_conv2 = PointWiseConv(in_channel=feature // alpha, out_channel=feature, bs=True)
         self.sigmoid = nn.Sigmoid()
 
@@ -232,7 +246,7 @@ class RefineModule(nn.Module):
         self.conv2 = nn.Conv2d(feature * 2, feature, 3, 1, 1, bias=False)
         self.conv3 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
         self.conv4 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
-        self.conv5 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
+        # self.conv5 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
         self.conv6 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
         self.conv7 = PointWiseConv(feature, feature, bs=True)
         self.conv8 = PointWiseConv(feature, feature, bs=True)
@@ -241,34 +255,35 @@ class RefineModule(nn.Module):
         self.act1 = nn.ReLU(True)
         self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
-        self.act4 = nn.ReLU(True)
+        # self.act4 = nn.ReLU(True)
         self.act5 = nn.ReLU(True)
         self.bn = nn.BatchNorm2d(feature)
         self.bn1 = nn.BatchNorm2d(feature)
         self.bn2 = nn.BatchNorm2d(feature)
         self.bn3 = nn.BatchNorm2d(feature)
-        self.bn4 = nn.BatchNorm2d(feature)
+        # self.bn4 = nn.BatchNorm2d(feature)
         self.bn5 = nn.BatchNorm2d(feature)
 
-    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
-        x1, x2, x3 = x  # hihg -> low ch
-        x1_up = self.up_sample1(x1)
-        x = torch.cat([x1_up, x2], dim=1)
-        x = self.act(self.bn(self.conv1(x)))
-        x3_down = self.down_sample1(x3)
-        x = torch.cat([x, x3_down], dim=1)
-        x = self.act1(self.bn1(self.conv2(x)))
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        p3, p4, p5 = x  # 64 32 16
+        p5_up = self.up_sample1(p5)
+        p3_down = self.down_sample1(p3)
+        p4_inter = torch.cat([p5_up, p4], dim=1)
+        p4_inter = self.act(self.bn(self.conv1(p4_inter)))
+        p4_inter = torch.cat([p4_inter, p3_down], dim=1)
+        p4_inter = self.act1(self.bn1(self.conv2(p4_inter)))
+
         # Refine
-        x = self.act2(self.bn2(self.conv3(x)))
-        x_up = self.up_sample2(x)
-        x_down = self.down_sample2(x)
-        x_down = self.act3(self.bn3(self.conv4(x_down)))
-        x = self.act4(self.bn4(self.conv5(x)))
-        x_up = self.act5(self.bn5(self.conv6(x_up)))
-        x1 = self.conv7(torch.add(x_down, x1))  # 512 16
-        x2 = self.conv8(torch.add(x, x2))  # 256 32
-        x3 = self.conv9(torch.add(x_up, x3))  # 128 64
-        return [x1, x2, x3]
+        p4_inter = self.act2(self.bn2(self.conv3(p4_inter)))
+        p4_up = self.up_sample2(p4_inter)
+        p4_down = self.down_sample2(p4_inter)
+        # x = self.act4(self.bn4(self.conv5(x)))
+        p4_down = self.act3(self.bn3(self.conv4(p4_down)))
+        p4_up = self.act5(self.bn5(self.conv6(p4_up)))
+        p5 = self.conv7(torch.add(p4_down, p5))  # 512 16
+        p4 = self.conv8(torch.add(p4_inter, p4))  # 256 32
+        p3 = self.conv9(torch.add(p4_up, p3))  # 128 64
+        return p3, p4, p5
 
 
 class ScaleExp(nn.Module):
@@ -331,7 +346,7 @@ class HeadFRFCOS(nn.Module):
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # Total params: 34,136,668  flop39.39G  para0.03G
     model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
     model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
     # tns = torch.rand(1, 3, 512, 512).to(device)
@@ -342,3 +357,11 @@ if __name__ == '__main__':
     # # #
     # writer.add_graph(model, tns)
     # writer.close()
+    # Total
+    # params: 38, 465, 372
+    # Trainable
+    # params: 38, 154, 524
+    # Non - trainable
+    # params: 310, 848
+    # Total
+    # mult - adds(G): 49.14
