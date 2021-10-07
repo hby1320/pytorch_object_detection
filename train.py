@@ -19,19 +19,19 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 50
-batch_size = 16
+EPOCH = 100
+batch_size = 32
 
 LR_INIT = 1e-2  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
 # mode = 'FCOS'
-mode = 'proposed'
+mode = 'FRFCOS_refine'
 if mode == 'FCOS':
     model_name = 'FCOS_org_test2'
 else:
-    model_name = 'FRFCOS'
+    model_name = 'FRFCOS_refine'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -226,9 +226,9 @@ if __name__ == '__main__':
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
-        # if loss > best_loss:
-        #     torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
-        #     best_loss = loss
+        if loss > best_loss:
+            torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
+            best_loss = loss
 
         if epoch >= EPOCH-5:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")

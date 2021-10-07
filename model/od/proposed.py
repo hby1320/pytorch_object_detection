@@ -30,7 +30,7 @@ Total GFLOPs: 98.2822
         self.backbone = ResNet50(3)
         self.backbone_freeze = bn_freeze
         self.fpn = ICSPFPN(feature_map, feature)
-        # self.refine = RefineModule(feature)
+        self.refine = RefineModule(feature)
         self.head = HeadFRFCOS(feature, num_classes, 0.01)
 
         def freeze_bn(module: nn.Module):
@@ -49,7 +49,7 @@ Total GFLOPs: 98.2822
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.backbone(x)  # 512 * 64, 1024 * 32, 2048  * 16
         x = self.fpn(x)  # p5, p6, p7 128 256 512
-        # x = self.refine(x)
+        x = self.refine(x)
         cls, cnt, reg = self.head(x)
         return [cls, cnt, reg]
 
