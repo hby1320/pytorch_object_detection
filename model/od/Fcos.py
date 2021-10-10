@@ -83,9 +83,9 @@ class FeaturePyramidNetwork(nn.Module):
         p3 = self.P3_c1(p3)
         p4 = self.P4_c1(p4)
         p5 = self.P5_c1(p5)
-        # p6 = self.P6_c1(p5)
-        # p7 = self.P7_c1(self.act(p6))
-        return [p3, p4, p5]
+        p6 = self.P6_c1(p5)
+        p7 = self.P7_c1(self.act(p6))
+        return p3, p4, p5, p6, p7
 
 
 class HeadFCOS(nn.Module):

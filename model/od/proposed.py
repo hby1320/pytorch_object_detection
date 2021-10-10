@@ -30,7 +30,6 @@ Total GFLOPs: 98.2822
         self.backbone = ResNet50(3)
         self.backbone_freeze = bn_freeze
         self.fpn = ICSPFPN(feature_map, feature)
-        self.refine = RefineModule(feature)
         self.head = HeadFRFCOS(feature, num_classes, 0.01)
 
         def freeze_bn(module: nn.Module):
@@ -49,17 +48,16 @@ Total GFLOPs: 98.2822
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.backbone(x)  # 512 * 64, 1024 * 32, 2048  * 16
         x = self.fpn(x)  # p5, p6, p7 128 256 512
-        x = self.refine(x)
         cls, cnt, reg = self.head(x)
-        return [cls, cnt, reg]
+        return cls, cnt, reg
 
 
 class ICSPFPN(nn.Module):
     def __init__(self, feature_map: List[int], feature: int):
         super(ICSPFPN, self).__init__()
-        self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, bias=False)
-        self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, bias=False)
-        self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, bias=False)
+        self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, padding=1//2, bias=False)
+        self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, padding=1//2, bias=False)
+        self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, padding=1//2, bias=False)
         self.icsp_blcok1 = ICSPBlock(feature, feature, 3, 2, 4)
         self.icsp_blcok2 = ICSPBlock(feature, feature, 3, 2, 4)
         self.icsp_blcok3 = ICSPBlock(feature, feature, 3, 2, 4)
@@ -133,7 +131,7 @@ class ICSPBlock(nn.Module):
         # self.bottle_3 = MCbottle(in_ch, in_ch, k, beta, alpha)
         self.pw_conv3 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
         self.pw_conv4 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
-        self.pw_conv5 = nn.Conv2d(in_ch, out_ch, 3, 1, 1, bias=False)
+        self.pw_conv5 = nn.Conv2d(in_ch, out_ch, 1, 1, 1//2, bias=False)
         # self.dw_conv1 = DepthWiseConv2d(in_ch*beta, k, 1)
         # self.se_block = SEBlock(in_ch*beta, alpha=alpha)
         # self.bn = nn.BatchNorm2d(in_ch*beta)
@@ -141,11 +139,13 @@ class ICSPBlock(nn.Module):
         # self.bn2 = nn.BatchNorm2d(in_ch)
         self.bn3 = nn.BatchNorm2d(in_ch)
         self.bn4 = nn.BatchNorm2d(out_ch)
+        # self.bn3 = nn.GroupNorm(32, in_ch)
+        # self.bn4 = nn.GroupNorm(32, out_ch)
         # self.act = nn.ReLU(True)
         # self.act1 = nn.ReLU(True)
         # self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
-        self.act4 = nn.ReLU(True)
+        self.act4 = nn.SiLU(True)
         # self.conv1 = nn.Conv2d(in_ch, in_ch*beta, 3, 1,1,bias=False)
         # self.bn5 = nn.BatchNorm2d(in_ch*beta)
         # self.act5 = nn.ReLU(True)
@@ -235,55 +235,55 @@ class SEBlock(nn.Module):
 #         return x1, x2, x3
 
 
-class RefineModule(nn.Module):
-    def __init__(self, feature: int):
-        super(RefineModule, self).__init__()
-        self.up_sample1 = nn.Upsample(scale_factor=2)
-        self.up_sample2 = nn.Upsample(scale_factor=2)
-        self.down_sample1 = nn.MaxPool2d(2, 2)
-        self.down_sample2 = nn.MaxPool2d(2, 2)
-        self.conv1 = nn.Conv2d(feature * 2, feature, 3, 1, 1, bias=False)
-        self.conv2 = nn.Conv2d(feature * 2, feature, 3, 1, 1, bias=False)
-        self.conv3 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
-        self.conv4 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
-        # self.conv5 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
-        self.conv6 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
-        self.conv7 = PointWiseConv(feature, feature, bs=True)
-        self.conv8 = PointWiseConv(feature, feature, bs=True)
-        self.conv9 = PointWiseConv(feature, feature, bs=True)
-        self.act = nn.ReLU(True)
-        self.act1 = nn.ReLU(True)
-        self.act2 = nn.ReLU(True)
-        self.act3 = nn.ReLU(True)
-        # self.act4 = nn.ReLU(True)
-        self.act5 = nn.ReLU(True)
-        self.bn = nn.BatchNorm2d(feature)
-        self.bn1 = nn.BatchNorm2d(feature)
-        self.bn2 = nn.BatchNorm2d(feature)
-        self.bn3 = nn.BatchNorm2d(feature)
-        # self.bn4 = nn.BatchNorm2d(feature)
-        self.bn5 = nn.BatchNorm2d(feature)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        p3, p4, p5 = x  # 64 32 16
-        p5_up = self.up_sample1(p5)
-        p3_down = self.down_sample1(p3)
-        p4_inter = torch.cat([p5_up, p4], dim=1)
-        p4_inter = self.act(self.bn(self.conv1(p4_inter)))
-        p4_inter = torch.cat([p4_inter, p3_down], dim=1)
-        p4_inter = self.act1(self.bn1(self.conv2(p4_inter)))
-
-        # Refine
-        p4_inter = self.act2(self.bn2(self.conv3(p4_inter)))
-        p4_up = self.up_sample2(p4_inter)
-        p4_down = self.down_sample2(p4_inter)
-        # x = self.act4(self.bn4(self.conv5(x)))
-        p4_down = self.act3(self.bn3(self.conv4(p4_down)))
-        p4_up = self.act5(self.bn5(self.conv6(p4_up)))
-        p5 = self.conv7(torch.add(p4_down, p5))  # 512 16
-        p4 = self.conv8(torch.add(p4_inter, p4))  # 256 32
-        p3 = self.conv9(torch.add(p4_up, p3))  # 128 64
-        return p3, p4, p5
+# class RefineModule(nn.Module):
+#     def __init__(self, feature: int):
+#         super(RefineModule, self).__init__()
+#         self.up_sample1 = nn.Upsample(scale_factor=2)
+#         self.up_sample2 = nn.Upsample(scale_factor=2)
+#         self.down_sample1 = nn.MaxPool2d(2, 2)
+#         self.down_sample2 = nn.MaxPool2d(2, 2)
+#         self.conv1 = nn.Conv2d(feature * 2, feature, 3, 1, 1, bias=False)
+#         self.conv2 = nn.Conv2d(feature * 2, feature, 3, 1, 1, bias=False)
+#         self.conv3 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
+#         self.conv4 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
+#         # self.conv5 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
+#         self.conv6 = nn.Conv2d(feature, feature, 3, 1, 1, bias=False)
+#         self.conv7 = PointWiseConv(feature, feature, bs=True)
+#         self.conv8 = PointWiseConv(feature, feature, bs=True)
+#         self.conv9 = PointWiseConv(feature, feature, bs=True)
+#         self.act = nn.ReLU(True)
+#         self.act1 = nn.ReLU(True)
+#         self.act2 = nn.ReLU(True)
+#         self.act3 = nn.ReLU(True)
+#         # self.act4 = nn.ReLU(True)
+#         self.act5 = nn.ReLU(True)
+#         self.bn = nn.BatchNorm2d(feature)
+#         self.bn1 = nn.BatchNorm2d(feature)
+#         self.bn2 = nn.BatchNorm2d(feature)
+#         self.bn3 = nn.BatchNorm2d(feature)
+#         # self.bn4 = nn.BatchNorm2d(feature)
+#         self.bn5 = nn.BatchNorm2d(feature)
+#
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         p3, p4, p5 = x  # 64 32 16
+#         p5_up = self.up_sample1(p5)
+#         p3_down = self.down_sample1(p3)
+#         p4_inter = torch.cat([p5_up, p4], dim=1)
+#         p4_inter = self.act(self.bn(self.conv1(p4_inter)))
+#         p4_inter = torch.cat([p4_inter, p3_down], dim=1)
+#         p4_inter = self.act1(self.bn1(self.conv2(p4_inter)))
+#
+#         # Refine
+#         p4_inter = self.act2(self.bn2(self.conv3(p4_inter)))
+#         p4_up = self.up_sample2(p4_inter)
+#         p4_down = self.down_sample2(p4_inter)
+#         # x = self.act4(self.bn4(self.conv5(x)))
+#         p4_down = self.act3(self.bn3(self.conv4(p4_down)))
+#         p4_up = self.act5(self.bn5(self.conv6(p4_up)))
+#         p5 = self.conv7(torch.add(p4_down, p5))  # 512 16
+#         p4 = self.conv8(torch.add(p4_inter, p4))  # 256 32
+#         p3 = self.conv9(torch.add(p4_up, p3))  # 128 64
+#         return p3, p4, p5
 
 
 class ScaleExp(nn.Module):
@@ -313,11 +313,13 @@ class HeadFRFCOS(nn.Module):
 
         for i in range(2):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
-            cls_branch.append(nn.BatchNorm2d(feature))
+            cls_branch.append(nn.GroupNorm(32, feature))
+            # cls_branch.append(nn.BatchNorm2d(feature))
             cls_branch.append(nn.ReLU(True))
 
             reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
-            reg_branch.append(nn.BatchNorm2d(feature))
+            reg_branch.append(nn.GroupNorm(32, feature))
+            # reg_branch.append(nn.BatchNorm2d(feature))
             reg_branch.append(nn.ReLU(True))
 
         self.cls_conv = nn.Sequential(*cls_branch)
