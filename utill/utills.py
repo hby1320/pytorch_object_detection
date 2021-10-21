@@ -7,12 +7,13 @@ from thop import profile
 
 
 def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
+    model.eval()
     col_names = ["input_size", "output_size", "num_params", "kernel_size", "mult_adds"]
     img = torch.rand(batch, ch, width, hight).to(device)
-    summary(model, img.size(), None, None, col_names=col_names, depth = depth, verbose= 1)
+    model_statistics = summary(model, img.size(), None, None, col_names=col_names, depth = depth, verbose= 1)
     flop, para = profile(model, inputs=(img,))
     print(f'flop{(flop/1e9):.2f}G  para{(para/1e9):.2f}G')
-
+    print(f'Total GFLOPs: {model_statistics.total_mult_adds * 2 / 1e9:.4f}')
 
 def generate_anchor(base_size=16, ratios=None, scales=None):
     if ratios is None:
