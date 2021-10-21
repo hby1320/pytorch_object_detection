@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from utill.utills import model_info, coords_origin_fcos
 from model.backbone.resnet50 import ResNet50
+from model.backbone.efficientnetv1 import EfficientNetV1
 
 from typing import List
 
@@ -19,10 +20,14 @@ class FCOS(nn.Module):
     Params size (MB): 123.91
     Estimated Total Size (MB): 1213.32
     """
-    def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
+    def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True, efficientnet :bool = False):
         super(FCOS, self).__init__()
-        self.backbone = ResNet50(3)
-        self.FPN = FeaturePyramidNetwork(in_channel, feature)
+        if efficientnet:
+            self.backbone = EfficientNetV1(0)
+            self.FPN = ef_FeaturePyramidNetwork(in_channel, feature)
+        else:
+            self.backbone = ResNet50(3)
+            self.FPN = FeaturePyramidNetwork(in_channel, feature)
         self.head = HeadFCOS(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
 
@@ -35,19 +40,62 @@ class FCOS(nn.Module):
         if self.backbone_freeze:
             self.apply(freeze_bn)
             print(f"success frozen BN")
-            self.backbone.freeze_stages(1)
-            print(f"success frozen_stage")
+            # self.backbone.freeze_stages(1)
+            # print(f"success frozen_stage")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x1,x2,x3 = self.backbone(x)
-        x = self.FPN([x1,x2,x3])
+        x = self.backbone(x)
+        x = self.FPN(x)
         cls, cnt, reg = self.head(x)
-        return [cls, cnt, reg]
+        return cls, cnt, reg
 
 
 class FeaturePyramidNetwork(nn.Module):
-    def __init__(self, in_channel:List[int], feature=256):
+    def __init__(self, in_channel: List[int], feature=256):
         super(FeaturePyramidNetwork, self).__init__()
+        self.P5 = nn.Conv2d(in_channels = in_channel[0], out_channels = feature, kernel_size = 1)
+        self.P4 = nn.Conv2d(in_channels = in_channel[1], out_channels = feature, kernel_size = 1)
+        self.P3 = nn.Conv2d(in_channels = in_channel[2], out_channels = feature, kernel_size = 1)
+        self.P5_Up = nn.Upsample(scale_factor = 2)
+        self.P4_Up = nn.Upsample(scale_factor = 2)
+        self.P5_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
+        self.P4_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
+        self.P3_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1)
+        self.P6_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, stride = 2)
+        self.P7_c1 = nn.Conv2d(feature, feature, kernel_size = 3, padding = 1, stride = 2)
+        self.act = nn.ReLU(True)
+        self.apply(self.init_conv_kaiming)
+
+    def init_conv_kaiming(self, module):
+        if isinstance(module, nn.Conv2d):
+            nn.init.kaiming_uniform_(module.weight, a=1)
+
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        c3, c4, c5 = x
+        p5 = self.P5(c5)  #  16
+        p4_c = self.P4(c4)  # 32
+        p3_c = self.P3(c3)  # 64
+
+        p4 = self.P5_Up(p5)  # 16 >32
+        p4 = torch.add(p4, p4_c)   # 32+32
+        p4 = self.P4_c1(p4)
+
+        p3 = self.P4_Up(p4)
+        p3 = torch.add(p3, p3_c)
+        p3 = self.P3_c1(p3)
+
+        p5 = self.P5_c1(p5)
+        p6 = self.P6_c1(p5)
+        p7 = self.P7_c1(self.act(p6))
+        return p3, p4, p5, p6, p7
+
+
+class ef_FeaturePyramidNetwork(nn.Module):
+    def __init__(self, in_channel: List[int], feature=256):
+        super(ef_FeaturePyramidNetwork, self).__init__()
         self.P5 = nn.Conv2d(in_channels = in_channel[0], out_channels = feature, kernel_size = 1)
         self.P4 = nn.Conv2d(in_channels = in_channel[1], out_channels = feature, kernel_size = 1)
         self.P3 = nn.Conv2d(in_channels = in_channel[2], out_channels = feature, kernel_size = 1)
@@ -83,8 +131,8 @@ class FeaturePyramidNetwork(nn.Module):
         p3 = self.P3_c1(p3)
         p4 = self.P4_c1(p4)
         p5 = self.P5_c1(p5)
-        p6 = self.P6_c1(p5)
-        p7 = self.P7_c1(self.act(p6))
+        # p6 = self.P6_c1(p5)
+        # p7 = self.P7_c1(self.act(p6))
         return [p3, p4, p5]
 
 
@@ -124,7 +172,7 @@ class HeadFCOS(nn.Module):
             if module.bias is not None:
                 nn.init.constant_(module.bias, 0)
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         cls_logits = []
         cnt_logits = []
         reg_preds = []
@@ -213,11 +261,6 @@ class GenTargets(nn.Module):
         offset_min = torch.min(offset, dim=-1)[0]  # [Class, H*W, M]min[0] -> Value
         offset_max = torch.max(offset, dim=-1)[0]
 
-        mask_gt = offset_min > 0  #음수일제 정답 아니기 때문에
-        mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])  # 해당 특징맵 LV 이하 값 제거
-        offset_min = torch.min(offset, dim=-1)[0] ## [0] minValue
-        offset_max = torch.max(offset, dim=-1)[0] ## [0] Max
-
         mask_gt = offset_min > 0
         mask_lv = (offset_max > lim_range[0]) & (offset_max <= lim_range[1])
 
@@ -239,7 +282,7 @@ class GenTargets(nn.Module):
         reg_target = offset[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim=-1), 1)]
         reg_target = torch.reshape(reg_target, (batch, -1, 4))
 
-        labels = torch.broadcast_tensors(labels[:, None, :], area.long())[0]
+        labels = torch.broadcast_tensors(labels[:, None, :], area.long())[0]  #  int 형 탠서 사용
         cls_target = labels[torch.zeros_like(area, dtype = torch.bool).scatter_(-1, area_min_index.unsqueeze(dim= -1), 1)]
         cls_target = torch.reshape(cls_target, (batch, -1, 1))
 
@@ -255,7 +298,7 @@ class GenTargets(nn.Module):
 
         mask_pos_2 = mask_pos.long().sum(dim = -1)
 
-        mask_pos_2 = mask_pos_2 >=1
+        mask_pos_2 = mask_pos_2 >= 1
         assert mask_pos_2.shape == (batch, hw)
         cls_target[~mask_pos_2] = 0
         center_target[~mask_pos_2] = -1
@@ -264,16 +307,17 @@ class GenTargets(nn.Module):
         return cls_target, center_target, reg_target
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # flop51.69G -> 29M mAP ->  78.7
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FCOS(in_channel=[2048,1024,512], num_class = 20, feature=256).to(device)
+    # model = FCOS(in_channel=[320, 112, 40], num_class=20, feature=256, efficientnet= True).to(device)
     # a = torch.rand(1,3,512, 512).to(device)
-    # tns = torch.rand(1, 3, 512, 512).to(device)
+    tns = torch.rand(1, 3, 512, 512).to(device)
     model_info(model, 1, 3, 512, 512, device)  # flop51.26G  para0.03G
     # from torch.utils.tensorboard import SummaryWriter
-    # # import os
-    # #
-    # # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'fcos'))
-    # #
-    # # writer.add_graph(model, tns)
-    # # writer.close()
+    # import os
+    #
+    # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'ef_fcos'))
+    #
+    # writer.add_graph(model, tns)
+    # writer.close()
