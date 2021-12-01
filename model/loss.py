@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
-from torch.nn.functional import binary_cross_entropy_with_logits, smooth_l1_loss, l1_loss, huber_loss
-# from torch.nn import L1Loss
+from torch.nn.functional import binary_cross_entropy_with_logits, smooth_l1_loss, l1_loss, huber_loss, kl_div, mse_loss
 
 
 def compute_cls_loss(preds: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.tensor:
     batch_size = target.shape[0]
     preds_reshape = []
     class_num = preds[0].shape[1] # 20 / 80
-    mask = mask.unsqueeze(dim = -1)   #  torch.Size([2, 4724, 1])
+    mask = mask.unsqueeze(dim = -1)  # torch.Size([2, 4724, 1])
     # mask=targets>-1#[batch_size,sum(_h*_w),1]
     num_pos = torch.sum(mask, dim=[1, 2]).clamp_(min=1).float()  # [batch_size,]
     for pred in preds:
@@ -38,7 +37,7 @@ def compute_cnt_loss(preds, target, mask):
         pred = pred.permute(0, 2, 3, 1)
         pred = torch.reshape(pred, [batch_size, -1, c])
         preds_reshape.append(pred)
-    preds = torch.cat(preds_reshape, dim = 1) ## 차원 증가
+    preds = torch.cat(preds_reshape, dim = 1)  # 차원 증가
     assert preds.shape == target.shape  # [batch_size,sum(_h*_w),1]
     cnt_loss = []
     for batch_index in range(batch_size):
@@ -48,6 +47,13 @@ def compute_cnt_loss(preds, target, mask):
         cnt_loss.append(binary_cross_entropy_with_logits(input=pred_pos,
                                                      target=target_pos,
                                                      reduction='sum').view(1))
+        #
+        #
+        # cnt_loss.append(huber_loss(input=pred_pos.sigmoid(),
+        #                        target=target_pos,
+        #                        reduction='sum').view(1))
+
+        # cnt_loss.append(smooth_l1_loss(input=pred_pos, target=target_pos, reduction='sum').view(1))
     return torch.cat(cnt_loss, dim = 0)/num_pos  # [batch_size,]
 
 
@@ -64,7 +70,7 @@ def compute_dcnt_loss(preds, reg_target, cnt_target, mask):
         pred = torch.reshape(pred, [batch_size, -1, c])
         preds_reshape.append(pred)
     preds = torch.cat(preds_reshape, dim = 1) ## 차원 증가
-    #assert preds.shape == cnt_target.shape  # [batch_size,sum(_h*_w),1]
+    # assert preds.shape == cnt_target.shape  # [batch_size,sum(_h*_w),1]
     cnt_loss = []
     distance_loss = []
     total_loss = []

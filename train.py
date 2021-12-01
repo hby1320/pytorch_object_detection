@@ -19,39 +19,27 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 100
-batch_size = 32
+EPOCH = 50
+batch_size = 16
 
 LR_INIT = 1e-2  # 0.0001
 MOMENTUM = 0.9
 WEIGHTDECAY = 0.0001
 
 # mode = 'FCOS'
-mode = 'FRFCOS_refine'
+mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_org_test2'
+    model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'FRFCOS_refine'
+    model_name = 'proposed_test_ag'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
 swa_enabled = False
-Transform = Transforms()
+# Transform = Transforms()
+Transform = None
 
 if __name__ == '__main__':
-    # data_transform = transforms.Compose([
-    #     transforms.Resize((512, 512)),
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    #     transforms.RandomVerticalFlip(0.5),
-    #     transforms.ColorJitter(0.1, 0.1, 0.1, 0.1),
-    #     transforms.RandomRotation(degrees=10),
-    #     transforms.RandomSizedCrop(512)
-    # ])
-
-    # data_transform1 = transforms.Compose([
-    #     transforms.Resize((512, 512)),
-    #     transforms.ToTensor()])
 
     # DDP setting
     if ddp_enabled:
@@ -102,17 +90,22 @@ if __name__ == '__main__':
         #                              collate_fn = voc_collect,  pin_memory= True)
     if mode == 'FCOS':
         model = FCOS([2048, 1024, 512], 20, 256).to(device)
-        # gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
-        #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
+        gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
+                                limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
+        # gen_target = GenTargets(strides=[8, 16, 32],
+        #                         limit_range=[[-1, 64], [64, 128], [128, 9999999]])
+    elif mode == 'proposed':
+        model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
         gen_target = GenTargets(strides=[8, 16, 32],
                                 limit_range=[[-1, 64], [64, 128], [128, 999999]])
-    elif mode =='proposed':
-        model = FRFCOS([512, 1024, 2048],  20, 256).to(device)
-        gen_target = GenTargets(strides=[8, 16, 32],
-                                limit_range=[[-1, 64], [64, 128], [128, 999999]])
+        # model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
+        # gen_target = GenTargets(strides=[4, 8, 16, 32],
+        #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 999999]])
+        # gen_target = GenTargets(strides=[4, 8, 16, 32],
+        #                         limit_range=[[-1, 32], [32, 64], [64, 128], [128, 999999]])
 
     if ddp_enabled:
-        model = torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if swa_enabled:
         swa_model = AveragedModel(model)
@@ -169,7 +162,7 @@ if __name__ == '__main__':
 
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
-            #
+
             if GLOBAL_STEPS < WARMPUP_STEPS:
                 lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
                 for param in optimizer.param_groups:
@@ -184,7 +177,7 @@ if __name__ == '__main__':
                 lr = LR_INIT * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr
-            #
+
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
                 outputs = model(imgs)

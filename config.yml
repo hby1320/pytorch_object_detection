@@ -1,0 +1,20 @@
+amp_enabled : True
+ddp_enabled : False
+swa_enabled : False
+model_name : ''
+
+coco :
+  - hyperparemeter:
+      - EPOCH : 50
+      - batch_size : 16  # 32 default
+      - LR_INIT : 1e-2  # 0.0001
+      - MOMENTUM : 0.9
+      - WEIGHTDECAY : 0.0001
+
+voc :
+  - hyperparemeter:
+      - EPOCH : 50
+      - batch_size : 16
+      - LR_INIT : 1e-2  # 0.0001
+      - MOMENTUM : 0.9
+      - WEIGHTDECAY : 0.0001

@@ -32,6 +32,8 @@ class DepthWiseConv2d(nn.Conv2d):
                          kernel_size=kernel,
                          stride=st,
                          padding=kernel//2,
+                         # padding=dilated_reat,
+                         # dilation=dilated_reat,
                          groups=in_channel,
                          bias=False
                          )

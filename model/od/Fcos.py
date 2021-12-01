@@ -313,7 +313,7 @@ if __name__ == '__main__':  # flop51.69G -> 29M mAP ->  78.7
     # model = FCOS(in_channel=[320, 112, 40], num_class=20, feature=256, efficientnet= True).to(device)
     # a = torch.rand(1,3,512, 512).to(device)
     tns = torch.rand(1, 3, 512, 512).to(device)
-    model_info(model, 1, 3, 512, 512, device)  # flop51.26G  para0.03G
+    model_info(model, 1, 3, 800, 1024, device)  # flop51.26G  para0.03G
     # from torch.utils.tensorboard import SummaryWriter
     # import os
     #

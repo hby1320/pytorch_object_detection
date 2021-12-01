@@ -177,6 +177,7 @@ def evaluate(model: nn.Module,
     max_detection_boxes_num = 1000
     # strides = [8, 16, 32, 64, 128]
     strides = [8, 16, 32]
+    # strides = [8, 16, 32]
     gt_boxes = []
     gt_classes = []
     pred_boxes = []
@@ -200,7 +201,7 @@ def evaluate(model: nn.Module,
     for batch_idx, (imgs, targets, classes) in pbar:
         imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
         with torch.cuda.amp.autocast(enabled=amp_enable):
-            # torch.cuda.synchronize()
+            torch.cuda.synchronize()
             start_time = time.time()
             with torch.no_grad():
                 out = model(imgs)
@@ -216,8 +217,11 @@ def evaluate(model: nn.Module,
             gt_classes.append(classes[0].cpu().numpy())
             # gt_boxes.append(targets[0])
             # gt_classes.append(classes[0])
-            # torch.cuda.synchronize()
+            torch.cuda.synchronize()
             inference_time += time.time() - start_time
+
+    inference_time /= nb
+    fps = 1/ inference_time
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
     all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
@@ -235,7 +239,7 @@ def evaluate(model: nn.Module,
     for class_id, class_mAP in all_AP.items():
         mAP += float(class_mAP)
     mAP /= (len(CLASSES_NAME) - 1)
-    print(f'mAP=====>{mAP:.3f}\n {inference_time=}')
+    print(f'mAP=====>{mAP:.3f}\n {fps=}')
 
 
 if __name__ == '__main__':
@@ -275,7 +279,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/FRFCOS_50.pth'))
+        model.load_state_dict(torch.load('./checkpoint/proposed_test_ag_48.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel

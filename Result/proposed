@@ -1,0 +1,96 @@
+backbone: efficientNetv1
+Lr 1e-2
+WD 0.0001
+warm-up
+dvice 3090 1 bn 32
+
+ap for aeroplane is 0.8451420630075825
+ap for bicycle is 0.8582633236069989
+ap for bird is 0.8359667230098768
+ap for boat is 0.7196661698226015
+ap for bottle is 0.6683473696494103
+ap for bus is 0.8227507224500192
+ap for car is 0.8754049310268791
+ap for cat is 0.9125925655563418
+ap for chair is 0.5688311380192834
+ap for cow is 0.8252524480264511
+ap for diningtable is 0.6543413210455009
+ap for dog is 0.8999166709009105
+ap for horse is 0.8662072840818186
+ap for motorbike is 0.8568936643628393
+ap for person is 0.8356525135886088
+ap for pottedplant is 0.5561568307567197
+ap for sheep is 0.819961207070443
+ap for sofa is 0.706699332478675
+ap for train is 0.8903595954162951
+ap for tvmonitor is 0.8043451229127171
+mAP=====>0.791 -
+
+fps : 63.0334
+Total GFLOPs: 42.0002
+
+Total params: 9,871,420
+Trainable params: 9,801,244
+Non-trainable params: 70,176
+Total mult-adds (G): 21.00
+Input size (MB): 3.15
+Forward/backward pass size (MB): 685.30
+Params size (MB): 39.49
+Estimated Total Size (MB): 727.94
+
+
+ap for aeroplane is 0.8309770308861413
+ap for bicycle is 0.8685076286314516
+ap for bird is 0.8234266528849479
+ap for boat is 0.739730274170413
+ap for bottle is 0.6130167654646388
+ap for bus is 0.848215774265948
+ap for car is 0.8748701981028122
+ap for cat is 0.9289076209945737
+ap for chair is 0.584767339802184
+ap for cow is 0.8323006262569975
+ap for diningtable is 0.6893182631045033
+ap for dog is 0.8927226043452314
+ap for horse is 0.8765212419866479
+ap for motorbike is 0.8414553637673233
+ap for person is 0.8343989847699798
+ap for pottedplant is 0.5121650824124031
+ap for sheep is 0.8078274665834344
+ap for sofa is 0.6901054463584841
+ap for train is 0.8960507558314429
+ap for tvmonitor is 0.8087102060696754
+mAP=====>0.790
+ fps=tensor([48.6669], device='cuda:0')
+
+otal params: 31,515,228
+Trainable params: 31,208,988
+Non-trainable params: 306,240
+Total mult-adds (G): 39.71
+Input size (MB): 3.15
+Forward/backward pass size (MB): 1335.36
+Params size (MB): 126.06
+Estimated Total Size (MB): 1464.56
+Total GFLOPs: 79.4218 G
+
+ap for aeroplane is 0.801043910191075
+ap for bicycle is 0.8730936924186915
+ap for bird is 0.811165281811713
+ap for boat is 0.7001401464617505
+ap for bottle is 0.6677992542043492
+ap for bus is 0.8646455993820363
+ap for car is 0.8893703413112031
+ap for cat is 0.9095351459089792
+ap for chair is 0.5833639087325546
+ap for cow is 0.814182146148245
+ap for diningtable is 0.6865536607359
+ap for dog is 0.8826378171769955
+ap for horse is 0.8425480166099166
+ap for motorbike is 0.8420442068246476
+ap for person is 0.8479947308135557
+ap for pottedplant is 0.5571056307578619
+ap for sheep is 0.8184080740218622
+ap for sofa is 0.6672088290161339
+ap for train is 0.8984915466512878
+ap for tvmonitor is 0.8025369483355107
+mAP=====>0.788
+ fps=tensor([50.7763], device='cuda:0')

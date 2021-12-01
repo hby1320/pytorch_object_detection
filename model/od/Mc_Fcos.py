@@ -77,7 +77,6 @@ class MBConv(nn.Module):  # TODO SE Add
         self.act = nn.SiLU(True)  #swich
         # self.Sigmoid = nn.Sigmoid
 
-
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         x = self.act(self.bn(self.conv1(x))) ## channel sq  # CSP  c/2
         x1 = x
