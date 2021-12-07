@@ -2,7 +2,7 @@ amp_enabled : True
 ddp_enabled : False
 swa_enabled : False
 model_name : ''
-
+data_set : 'coco'
 coco :
   - hyperparemeter:
       - EPOCH : 50
