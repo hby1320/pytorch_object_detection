@@ -10,7 +10,7 @@ def load_cfg(file:str = '../config.yaml'
     with open(file) as f:
         cfg = yaml.safe_load(f)
 
-    cfg['amp_enabled'] =
+    cfg['amp_enabled']
     cfg['amp_enabled']
 
 
