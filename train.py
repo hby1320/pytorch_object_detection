@@ -19,7 +19,7 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 50
+EPOCH = 30
 batch_size = 16
 
 LR_INIT = 1e-2  # 0.0001
@@ -31,7 +31,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'proposed_test_ag'
+    model_name = 'proposed_test_hisblock_fix'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -40,7 +40,6 @@ swa_enabled = False
 Transform = None
 
 if __name__ == '__main__':
-
     # DDP setting
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -168,12 +167,12 @@ if __name__ == '__main__':
                 for param in optimizer.param_groups:
                     param['lr'] = lr
 
-            if GLOBAL_STEPS == 20001:
+            if GLOBAL_STEPS == 20001: #  20001
                 lr = LR_INIT * 0.1
                 for param in optimizer.param_groups:
                     param['lr'] = lr
 
-            if GLOBAL_STEPS == 27001:
+            if GLOBAL_STEPS == 27001: # 27001
                 lr = LR_INIT * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr
