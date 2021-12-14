@@ -5,13 +5,13 @@ from torchvision.models.feature_extraction import get_graph_node_names, create_f
 from utill.utills import model_info
 
 
-class VGG16(nn.Module):
+class VGG16(nn.Module):  # SSD 300 / 512
     def __init__(self):
         super(VGG16, self).__init__()
         vgg16 = torchvision.models.vgg16(pretrained=True)
-        # self.model_node, _ = get_graph_node_names(vgg16)
-        # print(self.model_node)
-        self.node = ['features.22', 'features.30']  # conv4-3, conv5-3 -> maxpool
+        vgg16.features[16].ceil_mode = True  #
+        # vgg16.features[30].ceil_mode = True  #
+        self.node = ['features.22', 'features.29']  # 'features.22': conv4-3, 'features.29': conv5-3 -> maxpool
         self.feature_extractor = create_feature_extractor(vgg16, return_nodes=self.node)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
