@@ -177,5 +177,42 @@ class ClipBoxes(nn.Module):
     #     torchvision.ops.batched_nms()
 
 
+class DefaultBoxGenerator(nn.Module):
+    def __init__(self, aspect_ratios, max_ratio, min_ratio, steps, clip, scales):
+        super(DefaultBoxGenerator, self).__init__()
+        self.aspect_ratios = aspect_ratios
+        self.steps = steps
+        self.clip = clip
+        number_of_output = len(aspect_ratios)
+
+        if scales is None:
+            if number_of_output > 1:
+                range_ratio = max_ratio - min_ratio
+                self.scales = [min_ratio + range_ratio * k / (number_of_output - 1.0) for k in range(number_of_output)]
+                self.scales.append(1.0)
+            else:
+                self.scales = scales
+
+            self.wh_pairs = self.generates_wh_paris(number_of_output)
+
+    def generates_wh_paris(self, number_of_output):
+        wh_pairs = []
+        for k in range(number_of_output):
+            s_k = self.scales[k]
+            s_prime_k = torch.sqrt(self.scales[k] * self.scales[k+1])
+            wh_pairs = [[s_k, s_k], [s_prime_k, s_prime_k]]
+
+            for ar in self.aspect_ratios[k]:
+                sq_ar = torch.sqrt(ar)
+                w = self.scales[k] * sq_ar
+                h = self.scales[k] / sq_ar
+                wh_pairs.extend([[w, h], [h, w]])
+
+            wh_pairs.append(torch.as_tensor(wh_pairs))
+        return wh_pairs
+
+
+
+
 
 
