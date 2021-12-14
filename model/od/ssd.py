@@ -103,6 +103,7 @@ if __name__ == '__main__':
     model = SSD512().to(device)
     dumy = torch.Tensor(1,3,512,512).to(device)
     model_info(model, 1, 3, 300, 300,device)
+
     from torchvision.models.detection import ssd300_vgg16
     from torchvision.models.detection.anchor_utils import DefaultBoxGenerator
     #
@@ -111,5 +112,5 @@ if __name__ == '__main__':
     #                                        steps=[8, 16, 32, 64, 100, 300])
     #
     # ssd = SSD(VGG16,anchor_generator, (512,512), 21)
-    ssd = ssd300_vgg16()
-    model_info(ssd, 1, 3, 300, 300, device, depth=5)
+    # ssd = ssd300_vgg16()
+    # model_info(ssd, 1, 3, 300, 300, device, depth=5)
