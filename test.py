@@ -175,8 +175,8 @@ def evaluate(model: nn.Module,
     score_threshold = 0.05
     nms_iou_threshold = 0.6
     max_detection_boxes_num = 1000
-    # strides = [8, 16, 32, 64, 128]
-    strides = [8, 16, 32]
+    strides = [8, 16, 32, 64, 128]
+    # strides = [8, 16, 32]
     # strides = [8, 16, 32]
     gt_boxes = []
     gt_classes = []
@@ -279,7 +279,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/proposed_hisblock_test_2_30.pth'))
+        model.load_state_dict(torch.load('./checkpoint/proposed_test_head_test2_50.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel

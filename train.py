@@ -19,25 +19,60 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-EPOCH = 30
-batch_size = 16
+# TODO : 2021-12-15 07:50 -> HISBlock structure ( Element sum last _>79.3 오히려 떨어짐
+# TODO : 2021-12-15 07:50 -> HISBlock structure (cat-add) -> 78.9
+# TODO : 2021-12-16 08:00 -> HISblock test2  0.798 /
+# TODO : 2021-12-16 08:00 -> proposed_test_hisblock_last2_50ep 80.3
+# TODO : 2021-12-17 fixed number of anchor AM 12:00
+'''
+1. FPN 구조에 8, 16, 32, 64, 128
+    ap for aeroplane is 0.8049968769071343
+    ap for bicycle is 0.8708558393345709
+    ap for bird is 0.8438003770084588
+    ap for boat is 0.7208290948610693
+    ap for bottle is 0.6466614597818955
+    ap for bus is 0.8523892358282081
+    ap for car is 0.8897923068891695
+    ap for cat is 0.9170131662600287
+    ap for chair is 0.6054474592628467
+    ap for cow is 0.8874872789620669
+    ap for diningtable is 0.6824700979924709
+    ap for dog is 0.9011635768009216
+    ap for horse is 0.8833992901133569
+    ap for motorbike is 0.8532564250926152
+    ap for person is 0.8490856674822269
+    ap for pottedplant is 0.5319812256904936
+    ap for sheep is 0.8426970734205469
+    ap for sofa is 0.752359301688923
+    ap for train is 0.90335352095388
+    ap for tvmonitor is 0.7850428652008534`
+    mAP=====>0.801 fps= [48.8308]
 
+2. FPN 구조에 4, 8, 16, 32
+    mAP:
+
+'''
+# TODO :
+
+
+EPOCH = 50
+batch_size = 16
 LR_INIT = 1e-2  # 0.0001
 MOMENTUM = 0.9
-WEIGHTDECAY = 0.0001
+WEIGHT_DECAY = 0.0001
 
 # mode = 'FCOS'
 mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'proposed_test_hisblock_fix'
+    model_name = 'proposed_test_head_test2'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
 swa_enabled = False
-# Transform = Transforms()
-Transform = None
+Transform = Transforms()
+# Transform = None
 
 if __name__ == '__main__':
     # DDP setting
@@ -61,7 +96,7 @@ if __name__ == '__main__':
     #  1 Data loader
     # voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
     #                          transforms = data_transform)
-    #
+
     # voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
     #                          transforms = data_transform)
 
@@ -95,13 +130,13 @@ if __name__ == '__main__':
         #                         limit_range=[[-1, 64], [64, 128], [128, 9999999]])
     elif mode == 'proposed':
         model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
-        gen_target = GenTargets(strides=[8, 16, 32],
-                                limit_range=[[-1, 64], [64, 128], [128, 999999]])
+        # gen_target = GenTargets(strides=[8, 16, 32],
+        #                         limit_range=[[-1, 128], [128, 512], [512, 999999]])
         # model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
         # gen_target = GenTargets(strides=[4, 8, 16, 32],
         #                         limit_range=[[-1, 64], [64, 128], [128, 256], [256, 999999]])
-        # gen_target = GenTargets(strides=[4, 8, 16, 32],
-        #                         limit_range=[[-1, 32], [32, 64], [64, 128], [128, 999999]])
+        gen_target = GenTargets(strides=[8, 16, 32, 64, 128],
+                                limit_range=[[-1, 64], [64, 128], [128, 256], [256, 512], [512, 999999]])
 
     if ddp_enabled:
         model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
@@ -111,7 +146,7 @@ if __name__ == '__main__':
     print(f'Activated model: {model_name} (rank{local_rank})')
 
     if opt == 'SGD':
-        optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHTDECAY)
+        optimizer = SGD(model.parameters(), lr=LR_INIT, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)
 
     elif opt == 'Adam':
         optimizer = Adam(model.parameters(), lr=LR_INIT)
@@ -127,14 +162,11 @@ if __name__ == '__main__':
 
     scaler = torch.cuda.amp.GradScaler(enabled = amp_enabled)
     criterion = FCOSLoss(mode= 'giou')  # 'iou'
-
-
     nb = len(train_dataloder)
-
     start_epoch = 0
     prev_mAP = 0.0
     best_loss = 0
-    WARMPUP_STEPS = 501
+    WARMUP_STEPS = 501
     GLOBAL_STEPS = 1
 
     if local_rank == 0:
@@ -149,21 +181,20 @@ if __name__ == '__main__':
         #     print('Train interrupt occurs.')
         #     break
 
-        if ddp_enabled:
+        if ddp_enabled:  # DDP option setting
             train_dataloder.sampler.set_epoch(epoch)
             torch.distributed.barrier()
         model.train()
 
         pbar = enumerate(train_dataloder)
         print(f'{"Gpu_mem":10s} {"cls":>10s} {"cnt":>10s} {"reg":>10s} {"total":>10s} ')
-        pbar = tqdm(pbar, total = nb,desc = 'Batch', leave = True, disable = False if local_rank == 0 else True)
+        pbar = tqdm(pbar, total = nb, desc = 'Batch', leave = True, disable = False if local_rank == 0 else True)
         for batch_idx, (imgs, targets, classes) in pbar:
-
             iters = len(train_dataloder) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
 
-            if GLOBAL_STEPS < WARMPUP_STEPS:
-                lr = float(GLOBAL_STEPS / WARMPUP_STEPS * LR_INIT)
+            if GLOBAL_STEPS < WARMUP_STEPS:
+                lr = float(GLOBAL_STEPS / WARMUP_STEPS * LR_INIT)
                 for param in optimizer.param_groups:
                     param['lr'] = lr
 
@@ -176,7 +207,6 @@ if __name__ == '__main__':
                 lr = LR_INIT * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr
-
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled = amp_enabled):
                 outputs = model(imgs)
@@ -201,7 +231,6 @@ if __name__ == '__main__':
                 writer.add_scalar(f'loss/training/batch reg_loss', losses[2], epoch)
                 writer.add_scalar('lr', optimizer.param_groups[0]['lr'], iters)
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)
-
             s = (f'{mem:10s} {losses[0].mean():10.4g} {losses[1].mean():10.4g} {losses[2].mean():10.4g} {losses[-1].mean():10.4g}')
             pbar.set_description(s)
             GLOBAL_STEPS += 1
@@ -218,9 +247,9 @@ if __name__ == '__main__':
         # if epoch % 5 == 0:
         # evaluate(model, valid_dataloder, amp_enabled, ddp_enabled, device, voc_07_trainval)
 
-        if loss > best_loss:
-            torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
-            best_loss = loss
+        # if loss > best_loss:
+        #     torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
+        #     best_loss = loss
 
         if epoch >= EPOCH-5:
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
