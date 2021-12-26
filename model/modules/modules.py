@@ -28,7 +28,7 @@ class StdConv(nn.Module):  # TODO activation if add
 
 
 class DepthWiseConv2d(nn.Conv2d):
-    def __init__(self, in_channel: int, kernel: int, st=1):
+    def __init__(self, in_channel: int, kernel: int, st=1, bs= False):
         super().__init__(in_channels=in_channel,
                          out_channels=in_channel,
                          kernel_size=kernel,
@@ -37,7 +37,7 @@ class DepthWiseConv2d(nn.Conv2d):
                          # padding=dilated_reat,
                          # dilation=dilated_reat,
                          groups=in_channel,
-                         bias=False
+                         bias=bs
                          )
 
 

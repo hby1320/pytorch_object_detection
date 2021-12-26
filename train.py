@@ -23,7 +23,13 @@ from data.augment import Transforms
 # TODO : 2021-12-15 07:50 -> HISBlock structure (cat-add) -> 78.9
 # TODO : 2021-12-16 08:00 -> HISblock test2  0.798 /
 # TODO : 2021-12-16 08:00 -> proposed_test_hisblock_last2_50ep 80.3
-# TODO : 2021-12-17 fixed number of anchor AM 12:00
+# TODO : 2021-12-17 fixed number of anchor AM 12:00 ->80.8
+# TODO : 2021-12-18 dilated rate :3 5 7
+# 2 : 80.8 3 :80.3 5 80.2 7: 0.796
+# TODO : 2021-12-18 dilated rate :3 5 7 mix :
+# TODO backbone test feature-extractor
+
+
 '''
 1. FPN 구조에 8, 16, 32, 64, 128
     ap for aeroplane is 0.8049968769071343
@@ -48,13 +54,8 @@ from data.augment import Transforms
     ap for tvmonitor is 0.7850428652008534`
     mAP=====>0.801 fps= [48.8308]
 
-2. FPN 구조에 4, 8, 16, 32
-    mAP:
-
 '''
 # TODO :
-
-
 EPOCH = 50
 batch_size = 16
 LR_INIT = 1e-2  # 0.0001
@@ -66,7 +67,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'proposed_test_head_test2'
+    model_name = 'backbone_test'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -95,10 +96,10 @@ if __name__ == '__main__':
 
     #  1 Data loader
     # voc_07_train = PascalVoc(root = "./data/voc/", year = "2007", image_set = "trainval", download = False,
-    #                          transforms = data_transform)
-
+    #                          transforms = data_transform1)
+    #
     # voc_12_train = PascalVoc(root = "./data/voc/", year = "2012", image_set = "trainval", download = False,
-    #                          transforms = data_transform)
+    #                          transforms = data_transform1)
 
     # voc_07_test = PascalVoc(root="./data/voc/", year="2007", image_set="test", download=False,
     #                          transforms=data_transform1)
@@ -116,8 +117,9 @@ if __name__ == '__main__':
                                      num_workers = 4, pin_memory= pin_memory, collate_fn = voc_07_train.collate_fn)
     else:
         sampler = False
-        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle = True, num_workers = 4,
-                                     collate_fn = voc_07_train.collate_fn, worker_init_fn= np.random.seed(0))
+        train_dataloder = DataLoader(voc_07_train+voc_12_train, batch_size = batch_size, shuffle=True, num_workers = 4,
+                                     collate_fn=voc_07_train.collate_fn, worker_init_fn=np.random.seed(0),
+                                     pin_memory=True)
         # train_dataloder = DataLoader(voc_07_train + voc_12_train, batch_size=batch_size, shuffle=True, num_workers=4,
         #                              collate_fn = voc_collect,  pin_memory= True)
         # valid_dataloder = DataLoader(voc_07_test, batch_size = batch_size, num_workers = 4,

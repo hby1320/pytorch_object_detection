@@ -221,7 +221,7 @@ def evaluate(model: nn.Module,
             inference_time += time.time() - start_time
 
     inference_time /= nb
-    fps = 1/ inference_time
+    fps = 1 / inference_time
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
     all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
@@ -254,7 +254,7 @@ if __name__ == '__main__':
         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     batch_size = 1
-    check_point_path = f'./checkpoint/proposed_test_2_50.pth'
+    check_point_path = f'./checkpoint/proposed_test_dilated_rate_mix2_50.pth'
     ddp_mode = False
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -279,7 +279,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/proposed_test_head_test2_50.pth'))
+        model.load_state_dict(torch.load('./checkpoint/proposed_test_dilated_cls_50.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel
