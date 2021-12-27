@@ -125,9 +125,9 @@ class TestModule(nn.Module):
 class ICSPFPN(nn.Module):
     def __init__(self, feature_map: List[int], feature: int):
         super(ICSPFPN, self).__init__()
-        self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, padding= 1//2, bias=True)
-        self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, padding= 1//2, bias=True)
-        self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, padding= 1//2, bias=True)
+        self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
+        self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
+        self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
         self.icsp_blcok1 = TestModule(feature, 4, 2)
         self.icsp_blcok2 = TestModule(feature, 4, 2)
         self.icsp_blcok3 = TestModule(feature, 4, 2)
@@ -144,6 +144,13 @@ class ICSPFPN(nn.Module):
         self.down_sample4 = nn.MaxPool2d(2, 2)
         self.down_sample5 = nn.MaxPool2d(2, 2)
         self.down_sample6 = nn.MaxPool2d(2, 2)
+        self.gn1 = nn.GroupNorm(32, feature)
+        self.gn2 = nn.GroupNorm(32, feature)
+        self.gn3 = nn.GroupNorm(32, feature)
+        self.act1 = nn.ReLU(True)
+        self.act2 = nn.ReLU(True)
+        self.act3 = nn.ReLU(True)
+
     # [512, 1024, 2048], [128, 256, 512]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -168,35 +175,43 @@ class ICSPFPN(nn.Module):
         # return p5, p4, p3
         x1, x2, x3 = x
         x3_1 = self.tf1(x3)  # 256 16 16
+        x3_1 = self.gn1(x3_1)  # 256 16 16
+        x3_1 = self.act1(x3_1)
         x4_1 = self.down_sample3(x3_1)
         x5_1 = self.down_sample4(x4_1)
 
         p3 = self.icsp_blcok1(x3_1)  # 256 16 16
         p3_1 = self.Up_sample1(p3)  # 256 32 32
         x2 = self.tf2(x2)  # 256 32 32
+        x2 = self.gn2(x2)
+        x2 = self.act2(x2)
+
         p4_1 = torch.add(p3_1, x2)  # 256 32 32
 
         p4 = self.icsp_blcok2(p4_1)  # 256 32 32
         p5_1 = self.Up_sample2(p4)  # 256 64 64
         x1 = self.tf3(x1)  # 256 64 64
-        p5_1 = torch.add(p5_1, x1)  # 256 64 64
+        x1 = self.gn2(x1)
+        x1 = self.act2(x1)
 
+
+        p5_1 = torch.add(p5_1, x1)  # 256 64 64
         p5 = self.icsp_blcok3(p5_1)  # 256 64 64 @
+
         p5_2 = self.down_sample1(p5)  # 32
         p4_2 = torch.add(p5_2, p4)
-
         p4 = self.icsp_blcok4(p4_2)  # 32
+
         p3_2 = self.down_sample2(p4)
         p3 = torch.add(p3_2, p3)
-
         p3 = self.icsp_blcok5(p3)  # 16
+
         p2_2 = self.down_sample5(p3)
         p2 = torch.add(p2_2, x4_1)
-
         p2 = self.icsp_blcok6(p2)
+
         p1_2 = self.down_sample6(p2)
         p1 = torch.add(p1_2, x5_1)
-
         p1 = self.icsp_blcok7(p1)
         return p5, p4, p3, p2, p1
 
@@ -252,11 +267,11 @@ class HeadFRFCOS(nn.Module):
         self.act2 = nn.SiLU(True)
 
         for i in range(1):
-            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', dilation=3,bias=False))
+            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', dilation=3, bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
 
-            reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
+            reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', dilation=3, bias=False))
             reg_branch.append(nn.GroupNorm(32, feature))
             reg_branch.append(nn.ReLU(True))
 

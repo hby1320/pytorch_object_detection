@@ -7,19 +7,17 @@ from typing import List
 
 
 def reshape_cat_out(inputs:torch.Tensor, strides: List[int]) -> torch.Tensor:
-    '''
+    """
     Args
     inputs: list contains five [batch_size,c,_h,_w]
     Returns
     out [batch_size,sum(_h*_w),c]
     coords [sum(_h*_w),2]
-    '''
-
-    batch_size = inputs[0].shape[0]
-    c = inputs[0].shape[1]
-
+    """
     out = []
     coords = []
+    batch_size = inputs[0].shape[0]
+    c = inputs[0].shape[1]
     for pred, stride in zip(inputs, strides):
         pred = pred.permute(0, 2, 3, 1)
         coord = coords_origin_fcos(pred, stride).to(device=pred.device)
@@ -30,11 +28,11 @@ def reshape_cat_out(inputs:torch.Tensor, strides: List[int]) -> torch.Tensor:
 
 
 def _coords2boxes(coords, offsets):
-    '''
+    """
     Args
     coords [sum(_h*_w),2]
-    offsets [batch_size,sum(_h*_w),4] ltrb
-    '''
+    offsets [batch_size,sum(_h*_w),4] l,t, r,b
+    """
     x1y1 = coords[None, :, :] - offsets[..., :2]
     x2y2 = coords[None, :, :] + offsets[..., 2:]  # [batch_size,sum(_h*_w),2]
     boxes = torch.cat([x1y1, x2y2], dim=-1)  # [batch_size,sum(_h*_w),4]
@@ -84,7 +82,7 @@ class FCOSHead(nn.Module):
         assert boxes_topk.shape[-1] == 4
         return self.post_process([cls_scores_topk, cls_classes_topk, boxes_topk])
 
-    def post_process(self, preds_topk:List[torch.Tensor]):
+    def post_process(self, preds_topk: List[torch.Tensor]):
         cls_scores_post = []
         cls_classes_port = []
         boxes_post = []
@@ -99,10 +97,9 @@ class FCOSHead(nn.Module):
             cls_scores_post.append(cls_scores_b[nms_ind])
             cls_classes_port.append(cls_classes_b[nms_ind])
             boxes_post.append(boxes_b[nms_ind])
-
-            # print(f'{cls_scores_post=}\n{cls_classes_port}\n{boxes_post}')
-            # print(cls_scores_post)
-        scores, classes, boxes = torch.stack(cls_scores_post, dim=0), torch.stack(cls_classes_port, dim=0), torch.stack(boxes_post, dim=0)
+        scores, classes, boxes = torch.stack(cls_scores_post, dim=0), \
+                                 torch.stack(cls_classes_port, dim=0), \
+                                 torch.stack(boxes_post, dim=0)
         return scores, classes, boxes
 
     # def batched_nms(self, boxes, scores, idxs, iou_threshold):
