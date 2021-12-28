@@ -8,7 +8,7 @@ from dataset.pascalvoc import PascalVoc
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS, GenTargets
 from model.loss import FCOSLoss
-from model.od.proposed import FRFCOS
+from model.od.proposed import HalfInvertedStageFCOS
 from utill.utills import model_info, PolyLR, voc_collect
 from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
@@ -92,7 +92,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'test_dilate'
+    model_name = 'test_bn'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -156,7 +156,7 @@ if __name__ == '__main__':
         # gen_target = GenTargets(strides=[8, 16, 32],
         #                         limit_range=[[-1, 64], [64, 128], [128, 9999999]])
     elif mode == 'proposed':
-        model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
+        model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
         # gen_target = GenTargets(strides=[8, 16, 32],
         #                         limit_range=[[-1, 128], [128, 512], [512, 999999]])
         # model = FRFCOS([512, 1024, 2048], 20, 256).to(device)

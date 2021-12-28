@@ -11,9 +11,7 @@ from tqdm import tqdm
 from model.modules.head import FCOSHead, ClipBoxes
 import numpy as np
 from model.od.Fcos import FCOS
-from model.od.proposed import FRFCOS
-
-
+from model.od.proposed import HalfInvertedStageFCOS
 
 
 def sort_by_score(pred_boxes, pred_labels, pred_scores):
@@ -254,7 +252,7 @@ if __name__ == '__main__':
         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     batch_size = 1
-    check_point_path = f'./checkpoint/test_tf1_50.pth'
+    check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
     ddp_mode = False
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -269,7 +267,7 @@ if __name__ == '__main__':
     #                           collate_fn=voc_collect)
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
-    model = FRFCOS([512, 1024, 2048], 20, 256).to(device)
+    model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
     if ddp_mode:
         from collections import OrderedDict
         state_dict = torch.load(check_point_path)
@@ -280,7 +278,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/test_tf_non_dilate_47.pth'))
+        model.load_state_dict(torch.load('./checkpoint/test_fpn1_50.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel

@@ -145,3 +145,18 @@ class ICSPBlock(nn.Module):
         return x3
 
 
+class ScaleExp(nn.Module):
+    def __init__(self, init_value=1.0):
+        super(ScaleExp, self).__init__()
+        self.scale = nn.Parameter(torch.tensor([init_value], dtype=torch.float32))
+
+    def forward(self, x):
+        return torch.exp(x * self.scale)
+
+
+def init_conv_random_normal(module: nn.Module, std=0.01):
+    if isinstance(module, nn.Conv2d):
+        nn.init.normal_(module.weight, std=std)
+
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
