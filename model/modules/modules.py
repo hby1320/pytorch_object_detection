@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 
 
-class StdConv(nn.Module):  # TODO activation if add
+class StdConv(nn.Module):
     def __init__(self, in_channel: int, out_channel: int, kernel: int, st: int, padding=1, act='relu', d=1):
         super(StdConv, self).__init__()
         self.conv = nn.Conv2d(in_channels=in_channel,
@@ -16,9 +16,9 @@ class StdConv(nn.Module):  # TODO activation if add
         self.mode = act
 
         if self.mode == 'swish':
-            self.act = nn.SiLU(inplace = True)
+            self.act = nn.SiLU(True)
         else:
-            self.act = nn.ReLU(inplace = True)
+            self.act = nn.ReLU(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
@@ -28,14 +28,12 @@ class StdConv(nn.Module):  # TODO activation if add
 
 
 class DepthWiseConv2d(nn.Conv2d):
-    def __init__(self, in_channel: int, kernel: int, st=1, bs= False):
+    def __init__(self, in_channel: int, kernel: int, st=1, bs=False):
         super().__init__(in_channels=in_channel,
                          out_channels=in_channel,
                          kernel_size=kernel,
                          stride=st,
                          padding=kernel//2,
-                         # padding=dilated_reat,
-                         # dilation=dilated_reat,
                          groups=in_channel,
                          bias=bs
                          )
@@ -46,9 +44,9 @@ class PointWiseConv(nn.Conv2d):
         super().__init__(in_channels=in_channel,
                          out_channels=out_channel,
                          kernel_size=kernel,
-                         padding = kernel//2,
+                         padding=kernel//2,
                          stride=st,
-                         bias = bs
+                         bias=bs
                          )
 
 
@@ -59,7 +57,7 @@ class DownConv(nn.Conv2d):
                          kernel_size=kernel,
                          stride=st,
                          padding=kernel//2,
-                         bias = False
+                         bias=False
                          )
 
 
@@ -88,9 +86,9 @@ class SEBlock(nn.Module):
     def __init__(self, n_in, r=24):
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d(1)
-        self.excitation = nn.Sequential(nn.Conv2d(n_in, n_in // r, kernel_size = 1),
+        self.excitation = nn.Sequential(nn.Conv2d(n_in, n_in // r, kernel_size=1),
                                         nn.SiLU(),
-                                        nn.Conv2d(n_in // r, n_in, kernel_size = 1),
+                                        nn.Conv2d(n_in // r, n_in, kernel_size=1),
                                         nn.Sigmoid())
 
     def forward(self, x):
@@ -157,6 +155,14 @@ class ScaleExp(nn.Module):
 def init_conv_random_normal(module: nn.Module, std=0.01):
     if isinstance(module, nn.Conv2d):
         nn.init.normal_(module.weight, std=std)
+
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+
+
+def init_conv_kaiming(module):
+    if isinstance(module, nn.Conv2d):
+        nn.init.kaiming_uniform_(module.weight, a=1)
 
         if module.bias is not None:
             nn.init.constant_(module.bias, 0)

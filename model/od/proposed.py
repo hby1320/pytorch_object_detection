@@ -227,7 +227,7 @@ class HISFCOSHead(nn.Module):
         self.act1 = nn.ReLU(True)
         self.act2 = nn.SiLU(True)
         for i in range(1):
-            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
+            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', dilation=3, bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
 

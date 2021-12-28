@@ -55,7 +55,7 @@ class MC_FCOS(nn.Module):
 
 
 
-class MBConv(nn.Module):  # TODO SE Add
+class MBConv(nn.Module):
     def __init__(self, in_feature:int, out_feature:int, r=6):
         super(MBConv, self).__init__()
         # expanded = expansion_factor * in_feature

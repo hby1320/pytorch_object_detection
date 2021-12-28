@@ -7,7 +7,6 @@ import numpy as np
 
 
 class RetinaNet(nn.Module):
-
     def __init__(self, num_class: int):
         super().__init__()
         self.backbone = ResNet50(re_layer = 3)
@@ -22,7 +21,6 @@ class RetinaNet(nn.Module):
         regression = torch.cat([self.regression_sub_net(feature) for feature in x], dim=1)
         classification = torch.cat([self.classification_sub_net(feature) for feature in x], dim=1)
         # anchors = self.anchor(x)
-
         # return regression,classification,anchors
         return regression, classification
 
@@ -59,9 +57,7 @@ class FeaturePyramid(nn.Module):
 
         p3_x = self.P3_1(c3)
         p3_x = torch.add(p3_x, p4_up)
-
         p6_x = self.P6(c5)
-
         p7_x = self.P7_1(p6_x)
         p7_x = self.P7_2(p7_x)
 
@@ -84,7 +80,7 @@ class RegressionSubNet(nn.Module):
         out = self.conv4(out)
         out = self.output(out)
         out = out.permute(0, 2, 3, 1)  # out.shape = B,C,W,H & with 4*num_anchors
-        return out.reshape(out.shape[0], -1, 4)  # TODO 각 함수 기능 알아보기
+        return out.reshape(out.shape[0], -1, 4)
 
 
 class ClassificationSubNet(nn.Module):

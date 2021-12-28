@@ -278,7 +278,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/test_fpn1_50.pth'))
+        model.load_state_dict(torch.load('./checkpoint/test_gn_50.pth'))
         # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
     #
     # original saved file with DataParallel
