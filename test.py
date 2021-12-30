@@ -1,17 +1,14 @@
-import csv
-import os
 import time
-
 import torch
 import torch.nn as nn
 import torch.distributed
 import torch.utils.data
 from tqdm import tqdm
-
 from model.modules.head import FCOSHead, ClipBoxes
 import numpy as np
 from model.od.Fcos import FCOS
 from model.od.proposed import HalfInvertedStageFCOS
+from torchvision.ops import box_iou
 
 
 def sort_by_score(pred_boxes, pred_labels, pred_scores):
@@ -128,6 +125,7 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
                 pred_box = np.expand_dims(sample_pred_box[index], axis=0)
                 # pred_box = torch.unsqueeze(sample_pred_box[index], dim=0)
                 iou = iou_2d(sample_gts, pred_box)
+                # iou = box_iou(sample_gts, pred_box)
                 gt_for_box = np.argmax(iou, axis=0)
                 # gt_for_box = torch.argmax(iou, dim = 0)
                 max_overlap = iou[gt_for_box, 0]
@@ -202,7 +200,7 @@ def evaluate(model: nn.Module,
             torch.cuda.synchronize()
             start_time = time.time()
             with torch.no_grad():
-                out = model(imgs)
+                out = model(imgs)  # cls, cnt, reg
                 score, cls, boxes = head(out)
                 box = Clip(imgs, boxes)
                 pred_boxes.append(box[0].cpu().numpy())
@@ -246,11 +244,13 @@ if __name__ == '__main__':
     from dataset.pascalvoc import PascalVoc
     from dataset.voc import VOCDataset
     from torchvision.transforms import transforms
-    data_transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+
+    # data_transform = transforms.Compose([
+    #     transforms.Resize((512, 512)),
+    #     transforms.ToTensor(),
+    #     # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    # ])
+
     batch_size = 1
     check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
     ddp_mode = False
@@ -278,11 +278,6 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/test_gn_50.pth'))
-        # model.load_state_dict(torch.load('./checkpoint/FCOS_org_30.pth'))
-    #
-    # original saved file with DataParallel
-
-    # create new OrderedDict that does not contain `module.`
+        model.load_state_dict(torch.load('./checkpoint/test_module_test_50.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)

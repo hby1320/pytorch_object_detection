@@ -2,10 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from model.modules.modules import init_conv_random_normal, ScaleExp
-from utill.utills import model_info, coords_origin_fcos
+from utill.utills import model_info
 from model.backbone.resnet50 import ResNet50
 from model.backbone.efficientnetv1 import EfficientNetV1
-
 from typing import List
 
 
@@ -132,6 +131,7 @@ class HeadFCOS(nn.Module):
             cnt_logits.append(self.cnt_logits(reg_out))
             reg_preds.append(self.scale_exp[index](self.reg_pred(reg_out)))
         return cls_logits, cnt_logits, reg_preds
+
 
 if __name__ == '__main__':  # flop51.69G -> 29M mAP ->  78.7
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

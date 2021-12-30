@@ -18,9 +18,9 @@ def reshape_cat_out(inputs: torch.Tensor, strides: List[int]) -> torch.Tensor:
     batch_size = inputs[0].shape[0]
     c = inputs[0].shape[1]
     for pred, stride in zip(inputs, strides):
-        pred = pred.permute(0, 2, 3, 1)
-        coord = coords_origin_fcos(pred, stride).to(device=pred.device)
-        pred = torch.reshape(pred, [batch_size, -1, c])  # n h*w c
+        pred = pred.permute(0, 2, 3, 1)  # B, H, W, C
+        coord = coords_origin_fcos(pred, stride).to(device=pred.device)  # center point
+        pred = torch.reshape(pred, [batch_size, -1, c])  # B, H*W, C
         out.append(pred)
         coords.append(coord)
     return torch.cat(out, dim=1), torch.cat(coords, dim=0)
@@ -50,9 +50,9 @@ class FCOSHead(nn.Module):
         self.strides = strides
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        cls_logits, coords = reshape_cat_out(x[0], self.strides)
-        cen_logits, _ = reshape_cat_out(x[1], self.strides)
-        reg_preds, _ = reshape_cat_out(x[2], self.strides)
+        cls_logits, coords = reshape_cat_out(x[0], self.strides)  # cls,
+        cen_logits, _ = reshape_cat_out(x[1], self.strides)  # cnt
+        reg_preds, _ = reshape_cat_out(x[2], self.strides)  # reg
 
         cls_preds = torch.sigmoid(cls_logits)  # 0~1 normalized
         cen_preds = torch.sigmoid(cen_logits)  # 0~1 normalized
@@ -61,7 +61,7 @@ class FCOSHead(nn.Module):
 
         cls_score, cls_classes = torch.max(cls_preds, dim=-1)   # [batch, H*W]
         cls_score = torch.sqrt(cls_score * (cen_preds.squeeze(dim=-1)))
-        cls_classes = cls_classes + 1
+        cls_classes = cls_classes + 1  # background del
 
         boxes = _coords2boxes(coords, reg_preds)
 
@@ -153,7 +153,8 @@ class ClipBoxes(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, batch_imgs, batch_boxes):
+    @staticmethod
+    def forward(batch_imgs, batch_boxes):
         batch_boxes = batch_boxes.clamp_(min=0)
         h, w = batch_imgs.shape[2:]
         batch_boxes[..., [0, 2]] = batch_boxes[..., [0, 2]].clamp_(max=w - 1)

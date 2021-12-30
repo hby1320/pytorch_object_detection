@@ -467,3 +467,39 @@ ap for train is 0.8987595742890782
 ap for tvmonitor is 0.8109728580283405
 mAP=====>0.808
 fps=tensor([49.1461]
+
+cls dilate=3
+ap for aeroplane is 0.8290997070452488
+ap for bicycle is 0.880720157660843
+ap for bird is 0.839656181737662
+ap for boat is 0.7645405055954723
+ap for bottle is 0.6842699900596764
+ap for bus is 0.872235679017377
+ap for car is 0.8885547742462179
+ap for cat is 0.9338507091158023
+ap for chair is 0.6129901038341413
+ap for cow is 0.8714603746037239
+ap for diningtable is 0.7048279605645611
+ap for dog is 0.9045084322345696
+ap for horse is 0.8952757856607776
+ap for motorbike is 0.859792530793829
+ap for person is 0.8607184779702912
+ap for pottedplant is 0.5729838658447644
+ap for sheep is 0.8333690098090907
+ap for sofa is 0.7585892980052593
+ap for train is 0.9109604534118219
+ap for tvmonitor is 0.7937027698236008
+mAP=====>0.814
+
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.377
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.562
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.405
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.210
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.406
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.506
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.311
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.500
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.544
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.331
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.595
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.696

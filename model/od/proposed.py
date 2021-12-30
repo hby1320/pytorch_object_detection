@@ -5,6 +5,42 @@ from model.backbone.resnet50 import ResNet50v2
 from utill.utills import model_info
 from typing import List
 import numpy as np
+from torchvision.ops import deform_conv
+
+
+"""
+Total params: 32,662,846
+Trainable params: 32,378,366
+Non-trainable params: 284,480
+Total mult-adds (G): 36.91
+Input size (MB): 3.15
+Forward/backward pass size (MB): 1125.98
+Params size (MB): 130.65
+Estimated Total Size (MB): 1259.77
+-----------------------------------------
+cls dilate=3
+ap for aeroplane is 0.8290997070452488
+ap for bicycle is 0.880720157660843
+ap for bird is 0.839656181737662
+ap for boat is 0.7645405055954723
+ap for bottle is 0.6842699900596764
+ap for bus is 0.872235679017377
+ap for car is 0.8885547742462179
+ap for cat is 0.9338507091158023
+ap for chair is 0.6129901038341413
+ap for cow is 0.8714603746037239
+ap for diningtable is 0.7048279605645611
+ap for dog is 0.9045084322345696
+ap for horse is 0.8952757856607776
+ap for motorbike is 0.859792530793829
+ap for person is 0.8607184779702912
+ap for pottedplant is 0.5729838658447644
+ap for sheep is 0.8333690098090907
+ap for sofa is 0.7585892980052593
+ap for train is 0.9109604534118219
+ap for tvmonitor is 0.7937027698236008
+mAP=====>0.814
+"""
 
 
 class HalfInvertedStageFCOS(nn.Module):
@@ -75,14 +111,50 @@ class HisBlock(nn.Module):
         x3 = self.bn4(x3)
         x3 = self.act4(x3)
         return x3
+# class HisBlock(nn.Module):
+#     def __init__(self, feature: int, beta: int = 4, d_rate: int = 2):
+#         super(HisBlock, self).__init__()
+#         self.conv1 = nn.Conv2d(feature, feature//4, 1, 1, 'same')
+#         self.conv2 = nn.Conv2d(feature, feature//2, 1, 1, 'same')
+#         self.conv3 = nn.Conv2d(feature//2, feature//2, 3, 1, 'same', bias=False)
+#         self.conv4 = nn.Conv2d(feature, feature, 3, 1, 'same', d_rate, bias=False)
+#         self.conv1_1 = DepthWiseConv2d(feature//4, 3, 1, False)
+#         self.conv1_2 = SEBlock(feature//4, beta)
+#         self.bn1 = nn.BatchNorm2d(feature//4)
+#         self.act1 = nn.ReLU(True)
+#         self.bn2 = nn.BatchNorm2d(feature//4)
+#         self.act2 = nn.SiLU(True)
+#         self.bn3 = nn.BatchNorm2d(feature//2)
+#         self.act3 = nn.SiLU(True)
+#         self.bn4 = nn.BatchNorm2d(feature)
+#         self.act4 = nn.ReLU(True)
+#
+#     def forward(self, x: torch.Tensor) -> torch.Tensor:
+#         x1 = self.conv1(x)  # 128 x h x w
+#         x1 = self.bn1(x1)
+#         x1 = self.act1(x1)
+#         x2 = self.conv2(x)  # 128 x h x w
+#         x1_1 = self.conv1_1(x1)  # 64 x h xx1_2 w
+#         x1_1 = self.bn2(x1_1)
+#         x1_1 = self.act2(x1_1)
+#         x1_2 = self.conv1_2(x1)  # 64 x h x w -> 16 -> # 64 x h x w
+#         x1_c = torch.cat((x1_1, x1_2), dim=1)  # 128 x h x w
+#         x1_c = self.conv3(x1_c)
+#         x1_c = self.bn3(x1_c)
+#         x1_c = self.act3(x1_c)
+#         x3 = torch.cat((x1_c, x2), dim=1)
+#         x3 = self.conv4(x3)
+#         x3 = self.bn4(x3)
+#         x3 = self.act4(x3)
+#         return x3
 
 
 class HalfInvertedStageFPN(nn.Module):
     def __init__(self, feature_map: List[int], feature: int):
         super(HalfInvertedStageFPN, self).__init__()
-        self.tf1 = nn.Conv2d(in_channels=feature_map[2], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
-        self.tf2 = nn.Conv2d(feature_map[1], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
-        self.tf3 = nn.Conv2d(feature_map[0], out_channels=feature, kernel_size=1, padding= 1//2, bias=False)
+        self.tf1 = nn.Conv2d(feature_map[2], feature, 1, 1, 'same', bias=False)
+        self.tf2 = nn.Conv2d(feature_map[1], feature, 1, 1, 'same', bias=False)
+        self.tf3 = nn.Conv2d(feature_map[0], feature, 1, 1, 'same', bias=False)
         self.HisBlock1 = HisBlock(feature, 4, 2)
         self.HisBlock2 = HisBlock(feature, 4, 2)
         self.HisBlock3 = HisBlock(feature, 4, 2)
@@ -90,8 +162,6 @@ class HalfInvertedStageFPN(nn.Module):
         self.HisBlock5 = HisBlock(feature, 4, 2)
         self.HisBlock6 = HisBlock(feature, 4, 2)
         self.HisBlock7 = HisBlock(feature, 4, 2)
-        self.HisBlock8 = HisBlock(feature, 4, 2)
-        self.HisBlock9 = HisBlock(feature, 4, 2)
         self.Up_sample1 = nn.Upsample(scale_factor=2)
         self.Up_sample2 = nn.Upsample(scale_factor=2)
         self.Up_sample3 = nn.Upsample(scale_factor=2)
@@ -101,35 +171,17 @@ class HalfInvertedStageFPN(nn.Module):
         self.down_sample4 = nn.MaxPool2d(2, 2)
         self.down_sample5 = nn.MaxPool2d(2, 2)
         self.down_sample6 = nn.MaxPool2d(2, 2)
-        # self.gn1 = nn.GroupNorm(32, feature)
-        # self.gn2 = nn.GroupNorm(32, feature)
-        # self.gn3 = nn.GroupNorm(32, feature)
-        self.gn1 = nn.BatchNorm2d(feature)
-        self.gn2 = nn.BatchNorm2d(feature)
-        self.gn3 = nn.BatchNorm2d(feature)
+        self.gn1 = nn.GroupNorm(32, feature)
+        self.gn2 = nn.GroupNorm(32, feature)
+        self.gn3 = nn.GroupNorm(32, feature)
+        # self.gn1 = nn.BatchNorm2d(feature)
+        # self.gn2 = nn.BatchNorm2d(feature)
+        # self.gn3 = nn.BatchNorm2d(feature)
         self.act1 = nn.ReLU(True)
         self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x1, x2, x3 = x
-        # x3 = self.tf1(x3)  # 1024 16 16
-        # p3 = self.icsp_blcok1(x3)  # 512 16 16  @
-        # p3_1 = self.Up_sample1(p3)  # 512 32 32
-        # x2 = self.tf2(x2)  # 512 32 32
-        # p4_1 = torch.add(p3_1, x2)  # 512 32 32
-        # p4 = self.icsp_blcok2(p4_1)  # 256 32 32   @
-        # p5_1 = self.Up_sample2(p4)  # 256 64 64
-        # x1 = self.tf3(x1)  # 256 64 64
-        # p5_1 = torch.add(p5_1, x1)  # 256 64 64
-        # p5 = self.icsp_blcok3(p5_1)  # 128 64 64 @
-        # p5_2 = self.down_sample1(p5)
-        # p4_2 = torch.add(p5_2, p4)
-        # p4 = self.icsp_blcok4(p4_2)
-        # p3_2 = self.down_sample2(p4)
-        # p3 = torch.add(p3_2, p3)
-        # p3 = self.icsp_blcok5(p3)
-        # return p5, p4, p3
         # x1, x2, x3 = x
         # x3_1 = self.tf1(x3)  # 256 16 16
         # x3_1 = self.gn1(x3_1)  # 256 16 16
@@ -170,6 +222,7 @@ class HalfInvertedStageFPN(nn.Module):
         # p1 = torch.add(p1_2, x5_1)
         # p1 = self.HisBlock7(p1)
         # return p5, p4, p3, p2, p1
+
         x1, x2, x3 = x
         x3_1 = self.tf1(x3)  # 256 16 16
         x3_1 = self.gn1(x3_1)  # 256 16 16
@@ -226,8 +279,8 @@ class HISFCOSHead(nn.Module):
         self.gn2 = nn.GroupNorm(32, 2 * feature)
         self.act1 = nn.ReLU(True)
         self.act2 = nn.SiLU(True)
-        for i in range(1):
-            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', dilation=3, bias=False))
+        for i in range(2):
+            cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
 
@@ -249,17 +302,17 @@ class HISFCOSHead(nn.Module):
         cls_logits = []
         cnt_logits = []
         reg_preds = []
-        for index, P in enumerate(inputs):
-            x = self.pw1(P)
+        for index, feature in enumerate(inputs):
+            x = self.pw1(feature)
             x = self.gn1(x)
             x = self.act1(x)
             x = self.dw1(x)
             x = self.gn2(x)
             x = self.act2(x)
             x = self.pw2(x)
-            P = torch.add(x, P)
-            cls_conv_out = self.cls_conv(P)
-            reg_conv_out = self.reg_conv(P)
+            feature = torch.add(x, feature)
+            cls_conv_out = self.cls_conv(feature)
+            reg_conv_out = self.reg_conv(feature)
             cls_logits.append(self.cls_logits(cls_conv_out))
             cnt_logits.append(self.cnt_logits(reg_conv_out))
             reg_preds.append(self.scale_exp[index](self.reg_pred(reg_conv_out)))
@@ -276,13 +329,3 @@ if __name__ == '__main__':
     # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'test_1'))
     # writer.add_graph(model, tns)
     # writer.close()
-    """
-      Total params: 32,662,846
-      Trainable params: 32,378,366
-      Non-trainable params: 284,480
-      Total mult-adds (G): 36.91
-      Input size (MB): 3.15
-      Forward/backward pass size (MB): 1125.98
-      Params size (MB): 130.65
-      Estimated Total Size (MB): 1259.77
-      """

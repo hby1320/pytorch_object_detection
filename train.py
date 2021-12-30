@@ -56,31 +56,6 @@ from data.augment import Transforms
     mAP=====>0.801 fps= [48.8308]
 
 '''
-"""
-BN + ACT / cls dialted=3
-ap for aeroplane is 0.8290997070452488
-ap for bicycle is 0.880720157660843
-ap for bird is 0.839656181737662
-ap for boat is 0.7645405055954723
-ap for bottle is 0.6842699900596764
-ap for bus is 0.872235679017377
-ap for car is 0.8885547742462179
-ap for cat is 0.9338507091158023
-ap for chair is 0.6129901038341413
-ap for cow is 0.8714603746037239
-ap for diningtable is 0.7048279605645611
-ap for dog is 0.9045084322345696
-ap for horse is 0.8952757856607776
-ap for motorbike is 0.859792530793829
-ap for person is 0.8607184779702912
-ap for pottedplant is 0.5729838658447644
-ap for sheep is 0.8333690098090907
-ap for sofa is 0.7585892980052593
-ap for train is 0.9109604534118219
-ap for tvmonitor is 0.7937027698236008
-mAP=====>0.814
-
-"""
 
 EPOCH = 50
 batch_size = 16
@@ -93,7 +68,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'test_bn2'
+    model_name = 'test_head_t2'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
