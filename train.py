@@ -20,42 +20,6 @@ import random
 from test import evaluate
 from data.augment import Transforms
 
-# 2021-12-15 07:50 -> HISBlock structure ( Element sum last _>79.3 오히려 떨어짐
-# 2021-12-15 07:50 -> HISBlock structure (cat-add) -> 78.9
-# 2021-12-16 08:00 -> HISblock test2  0.798 /
-# 2021-12-16 08:00 -> proposed_test_hisblock_last2_50ep 80.3
-# 2021-12-17 fixed number of anchor AM 12:00 ->80.8
-# 2021-12-18 dilated rate :3 5 7
-# 2 : 80.8 3 :80.3 5 80.2 7: 0.796
-# 2021-12-18 dilated rate :3 5 7 mix :
-# backbone test feature-extractor
-
-
-'''
-1. FPN 구조에 8, 16, 32, 64, 128
-    ap for aeroplane is 0.8049968769071343
-    ap for bicycle is 0.8708558393345709
-    ap for bird is 0.8438003770084588
-    ap for boat is 0.7208290948610693
-    ap for bottle is 0.6466614597818955
-    ap for bus is 0.8523892358282081
-    ap for car is 0.8897923068891695
-    ap for cat is 0.9170131662600287
-    ap for chair is 0.6054474592628467
-    ap for cow is 0.8874872789620669
-    ap for diningtable is 0.6824700979924709
-    ap for dog is 0.9011635768009216
-    ap for horse is 0.8833992901133569
-    ap for motorbike is 0.8532564250926152
-    ap for person is 0.8490856674822269
-    ap for pottedplant is 0.5319812256904936
-    ap for sheep is 0.8426970734205469
-    ap for sofa is 0.752359301688923
-    ap for train is 0.90335352095388
-    ap for tvmonitor is 0.7850428652008534`
-    mAP=====>0.801 fps= [48.8308]
-
-'''
 
 EPOCH = 50
 batch_size = 16
@@ -68,7 +32,7 @@ mode = 'proposed'
 if mode == 'FCOS':
     model_name = 'FCOS_org_bn16_a3'
 else:
-    model_name = 'test_head_t2'
+    model_name = 'test_head_t3'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False
@@ -253,7 +217,7 @@ if __name__ == '__main__':
         #     torch.save(model.state_dict(), f"./checkpoint/{model_name}_best_loss.pth")
         #     best_loss = loss
 
-        if epoch >= EPOCH-5:
+        if epoch >= (EPOCH - 5):
             torch.save(model.state_dict(), f"./checkpoint/{model_name}_{epoch + 1}.pth")
 
     if writer is not None:

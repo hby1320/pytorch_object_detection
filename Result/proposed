@@ -503,3 +503,14 @@ mAP=====>0.814
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.331
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.595
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.696
+
+
+2021-12-15 07:50 -> HISBlock structure ( Element sum last _>79.3 오히려 떨어짐
+2021-12-15 07:50 -> HISBlock structure (cat-add) -> 78.9
+2021-12-16 08:00 -> HISblock test2  0.798 /
+2021-12-16 08:00 -> proposed_test_hisblock_last2_50ep 80.3
+2021-12-17 fixed number of anchor AM 12:00 ->80.8
+2021-12-18 dilated rate :3 5 7
+2 : 80.8 3 :80.3 5 80.2 7: 0.796
+2021-12-18 dilated rate :3 5 7 mix :
+backbone test feature-extractor
