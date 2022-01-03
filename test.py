@@ -162,11 +162,11 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
 
 
 def evaluate(model: nn.Module,
-             vall_data_loader: torch.utils.data.DataLoader,
+             val_data_loader: torch.utils.data.DataLoader,
              # criterion: nn.Module,
              amp_enable: bool,
              ddp_enable: bool,
-             device: torch.device,
+             devices: torch.device,
              ):
     score_threshold = 0.05
     nms_iou_threshold = 0.6
@@ -188,21 +188,21 @@ def evaluate(model: nn.Module,
         local_rank = 0
         world_size = 0
     head = FCOSHead(score_threshold, nms_iou_threshold, max_detection_boxes_num, strides)
-    Clip = ClipBoxes()
-    inference_time = torch.zeros(1, device = device)
+    clip = ClipBoxes()
+    inference_time = torch.zeros(1, device = devices)
     # val_loss = torch.zeros(4, device = device)
-    pbar = enumerate(vall_data_loader)
-    nb = len(vall_data_loader)
+    pbar = enumerate(val_data_loader)
+    nb = len(val_data_loader)
     pbar = tqdm(pbar, total=nb, desc='Batch', leave=True, disable=False if local_rank == 0 else True)
     for batch_idx, (imgs, targets, classes) in pbar:
-        imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
+        imgs, targets, classes = imgs.to(devices), targets.to(devices), classes.to(devices)
         with torch.cuda.amp.autocast(enabled=amp_enable):
             torch.cuda.synchronize()
             start_time = time.time()
             with torch.no_grad():
                 out = model(imgs)  # cls, cnt, reg
                 score, cls, boxes = head(out)
-                box = Clip(imgs, boxes)
+                box = clip(imgs, boxes)
                 pred_boxes.append(box[0].cpu().numpy())
                 pred_classes.append(cls[0].cpu().numpy())
                 pred_scores.append(score[0].cpu().numpy())
@@ -220,22 +220,22 @@ def evaluate(model: nn.Module,
     fps = 1 / inference_time
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
-    all_AP = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
-    CLASSES_NAME = (
+    all_ap = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
+    classes_name = (
         "__background__ ", "aeroplane", "bicycle", "bird", "boat",
         "bottle", "bus", "car", "cat", "chair",
         "cow", "diningtable", "dog", "horse", "motorbike",
         "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
 
     print(f'all classes AP=====>\n')
-    for key, value in all_AP.items():
+    for key, value in all_ap.items():
         # print(f'ap for {vialder.id2name[int(key)]} is {value}')
-        print(f'ap for {CLASSES_NAME[int(key)]} is {value}')
-    mAP = 0.
-    for class_id, class_mAP in all_AP.items():
-        mAP += float(class_mAP)
-    mAP /= (len(CLASSES_NAME) - 1)
-    print(f'mAP=====>{mAP:.3f}\n {fps=}')
+        print(f'ap for {classes_name[int(key)]} is {value}')
+    m_ap = 0.
+    for class_id, class_mAP in all_ap.items():
+        m_ap += float(class_mAP)
+    m_ap /= (len(classes_name) - 1)
+    print(f'mAP=====>{m_ap:.3f}\n {fps=}')
 
 
 if __name__ == '__main__':
@@ -278,6 +278,6 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/test_module_test_50.pth'))
+        model.load_state_dict(torch.load('./checkpoint/test_head_t3_50.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)

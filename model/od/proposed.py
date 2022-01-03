@@ -166,7 +166,7 @@ class HalfInvertedStageFPN(nn.Module):
         self.Up_sample2 = nn.Upsample(scale_factor=2)
         self.Up_sample3 = nn.Upsample(scale_factor=2)
         self.down_sample1 = nn.MaxPool2d(2, 2)
-        self.down_sample2 = nn.MaxPool2d(2, 2)
+        self.down_sample2 = nn.MaxPool2d(4, 4)
         self.down_sample3 = nn.MaxPool2d(2, 2)
         self.down_sample4 = nn.MaxPool2d(2, 2)
         self.down_sample5 = nn.MaxPool2d(2, 2)
@@ -228,7 +228,7 @@ class HalfInvertedStageFPN(nn.Module):
         x3_1 = self.gn1(x3_1)  # 256 16 16
         x3_1 = self.act1(x3_1)
         x4_1 = self.down_sample1(x3_1)  # 8
-        x5_1 = self.down_sample2(x4_1)  # 4
+        x5_1 = self.down_sample2(x3_1)  # 4
 
         p3 = self.HisBlock1(x3_1)  # 256 16 16
         p3_1 = self.Up_sample1(p3)  # 256 32 32
@@ -279,7 +279,7 @@ class HISFCOSHead(nn.Module):
         self.gn2 = nn.GroupNorm(32, 2 * feature)
         self.act1 = nn.ReLU(True)
         self.act2 = nn.SiLU(True)
-        for i in range(2):
+        for i in range(1):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
