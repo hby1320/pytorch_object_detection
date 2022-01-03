@@ -322,10 +322,49 @@ class HISFCOSHead(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
-    model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
+    # model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
 
     # from torch.utils.tensorboard import SummaryWriter
     # import os
     # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'test_1'))
     # writer.add_graph(model, tns)
     # writer.close()
+    import cv2
+    from pytorch_grad_cam import GradCAMPlusPlus
+    from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
+
+
+    def reshape_transform(tensor, height=7, width=7):
+        result = tensor.reshape(tensor.size(0),
+                                height, width, tensor.size(2))
+
+        # Bring the channels to the first dimension,
+        # like in CNNs.
+        result = result.transpose(2, 3).transpose(1, 2)
+        return result
+
+    cam = GradCAMPlusPlus(model, model.fpn.HisBlock1.act4, 'cpu', reshape_transform)
+
+
+    rgb_img = cv2.imread('../model/cat.jpg', 1)[:, :, ::-1]
+    rgb_img = cv2.resize(rgb_img, (224, 224))
+    rgb_img = np.float32(rgb_img) / 255
+    input_tensor = preprocess_image(rgb_img, mean=[0.5, 0.5, 0.5],
+                                    std=[0.5, 0.5, 0.5])
+
+    # If None, returns the map for the highest scoring category.
+    # Otherwise, targets the requested category.
+    target_category = 8
+
+    # AblationCAM and ScoreCAM have batched implementations.
+    # You can override the internal batch size for faster computation.
+    cam.batch_size = 32
+
+    grayscale_cam = cam(input_tensor=input_tensor,
+                        target_category=target_category)
+
+    # Here grayscale_cam has only one image in the batch
+    grayscale_cam = grayscale_cam[0, :]
+
+    cam_image = show_cam_on_image(rgb_img, grayscale_cam)
+    cv2.imwrite(f'cam_cam.jpg', cam_image)
