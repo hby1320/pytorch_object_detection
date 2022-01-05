@@ -39,6 +39,18 @@ class DepthWiseConv2d(nn.Conv2d):
                          )
 
 
+class DilatedDepthWiseConv2d(nn.Conv2d):
+    def __init__(self, in_channel: int, kernel: int, st=1, dilated=1, bs=False):
+        super().__init__(in_channels=in_channel,
+                         out_channels=in_channel,
+                         kernel_size=kernel,
+                         stride=st,
+                         padding=dilated,
+                         groups=in_channel,
+                         dilation=dilated,
+                         bias=bs
+                         )
+
 class PointWiseConv(nn.Conv2d):
     def __init__(self, in_channel: int, out_channel: int, kernel=1, st=1, bs=False):
         super().__init__(in_channels=in_channel,

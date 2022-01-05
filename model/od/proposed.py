@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
-from model.modules.modules import PointWiseConv, DepthWiseConv2d, ScaleExp, init_conv_random_normal, SEBlock
-from model.backbone.resnet50 import ResNet50v2
+from model.modules.modules import \
+    PointWiseConv, DepthWiseConv2d, ScaleExp, init_conv_random_normal, SEBlock, DilatedDepthWiseConv2d
+from model.backbone.resnet50 import ResNet50, ResNet50v2
 from utill.utills import model_info
 from typing import List
 import numpy as np
@@ -50,6 +51,7 @@ class HalfInvertedStageFCOS(nn.Module):
                  feature: int,
                  bn_freeze: bool = True):
         super(HalfInvertedStageFCOS, self).__init__()
+        # self.backbone = ResNet50(3)
         self.backbone = ResNet50v2()
         self.backbone_freeze = bn_freeze
         self.fpn = HalfInvertedStageFPN(feature_map, feature)
@@ -82,7 +84,7 @@ class HisBlock(nn.Module):
         self.conv2 = nn.Conv2d(feature, feature//2, 1, 1, 'same')
         self.conv3 = nn.Conv2d(feature, feature//2, 3, 1, 'same', bias=False)
         self.conv4 = nn.Conv2d(feature, feature, 3, 1, 'same', d_rate, bias=False)
-        self.conv1_1 = DepthWiseConv2d(feature//2, 3, 1, False)
+        self.conv1_1 = DilatedDepthWiseConv2d(feature//2, 3, 1, d_rate,  False)
         self.conv1_2 = SEBlock(feature//2, beta)
         self.bn1 = nn.BatchNorm2d(feature//2)
         self.act1 = nn.SiLU(True)
@@ -166,7 +168,7 @@ class HalfInvertedStageFPN(nn.Module):
         self.Up_sample2 = nn.Upsample(scale_factor=2)
         self.Up_sample3 = nn.Upsample(scale_factor=2)
         self.down_sample1 = nn.MaxPool2d(2, 2)
-        self.down_sample2 = nn.MaxPool2d(4, 4)
+        self.down_sample2 = nn.MaxPool2d(2, 2)
         self.down_sample3 = nn.MaxPool2d(2, 2)
         self.down_sample4 = nn.MaxPool2d(2, 2)
         self.down_sample5 = nn.MaxPool2d(2, 2)
@@ -228,7 +230,7 @@ class HalfInvertedStageFPN(nn.Module):
         x3_1 = self.gn1(x3_1)  # 256 16 16
         x3_1 = self.act1(x3_1)
         x4_1 = self.down_sample1(x3_1)  # 8
-        x5_1 = self.down_sample2(x3_1)  # 4
+        x5_1 = self.down_sample2(x4_1)  # 4
 
         p3 = self.HisBlock1(x3_1)  # 256 16 16
         p3_1 = self.Up_sample1(p3)  # 256 32 32
@@ -272,14 +274,14 @@ class HISFCOSHead(nn.Module):
         self.prior = prior
         cls_branch = []
         reg_branch = []
-        self.pw1 = PointWiseConv(feature, 2*feature)
-        self.pw2 = PointWiseConv(2 * feature, feature, bs=True)
-        self.dw1 = DepthWiseConv2d(2*feature, 3)
-        self.gn1 = nn.GroupNorm(32, 2 * feature)
-        self.gn2 = nn.GroupNorm(32, 2 * feature)
-        self.act1 = nn.ReLU(True)
-        self.act2 = nn.SiLU(True)
-        for i in range(1):
+        # self.pw1 = PointWiseConv(feature, 2*feature)
+        # self.pw2 = PointWiseConv(2 * feature, feature, bs=True)
+        # self.dw1 = DepthWiseConv2d(2*feature, 3)
+        # self.gn1 = nn.GroupNorm(32, 2 * feature)
+        # self.gn2 = nn.GroupNorm(32, 2 * feature)
+        # self.act1 = nn.ReLU(True)
+        # self.act2 = nn.SiLU(True)
+        for i in range(4):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
@@ -294,7 +296,7 @@ class HISFCOSHead(nn.Module):
         self.cls_logits = nn.Conv2d(feature, self.class_num, kernel_size=3, padding=1)
         self.cnt_logits = nn.Conv2d(feature, 1, kernel_size=3, padding=1)
         self.reg_pred = nn.Conv2d(feature, 4, kernel_size=3, padding=1)
-        self.apply(init_conv_random_normal)
+        # self.apply(init_conv_random_normal)
         nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))
         self.scale_exp = nn.ModuleList([ScaleExp(1.2) for _ in range(5)])
 
@@ -303,14 +305,14 @@ class HISFCOSHead(nn.Module):
         cnt_logits = []
         reg_preds = []
         for index, feature in enumerate(inputs):
-            x = self.pw1(feature)
-            x = self.gn1(x)
-            x = self.act1(x)
-            x = self.dw1(x)
-            x = self.gn2(x)
-            x = self.act2(x)
-            x = self.pw2(x)
-            feature = torch.add(x, feature)
+            # x = self.pw1(feature)
+            # x = self.gn1(x)
+            # x = self.act1(x)
+            # x = self.dw1(x)
+            # x = self.gn2(x)
+            # x = self.act2(x)
+            # x = self.pw2(x)
+            # feature = torch.add(x, feature)
             cls_conv_out = self.cls_conv(feature)
             reg_conv_out = self.reg_conv(feature)
             cls_logits.append(self.cls_logits(cls_conv_out))
@@ -322,49 +324,10 @@ class HISFCOSHead(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
-    # model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
+    model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
 
     # from torch.utils.tensorboard import SummaryWriter
     # import os
     # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'test_1'))
     # writer.add_graph(model, tns)
     # writer.close()
-    import cv2
-    from pytorch_grad_cam import GradCAMPlusPlus
-    from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
-
-
-    def reshape_transform(tensor, height=7, width=7):
-        result = tensor.reshape(tensor.size(0),
-                                height, width, tensor.size(2))
-
-        # Bring the channels to the first dimension,
-        # like in CNNs.
-        result = result.transpose(2, 3).transpose(1, 2)
-        return result
-
-    cam = GradCAMPlusPlus(model, model.fpn.HisBlock1.act4, 'cpu', reshape_transform)
-
-
-    rgb_img = cv2.imread('../model/cat.jpg', 1)[:, :, ::-1]
-    rgb_img = cv2.resize(rgb_img, (224, 224))
-    rgb_img = np.float32(rgb_img) / 255
-    input_tensor = preprocess_image(rgb_img, mean=[0.5, 0.5, 0.5],
-                                    std=[0.5, 0.5, 0.5])
-
-    # If None, returns the map for the highest scoring category.
-    # Otherwise, targets the requested category.
-    target_category = 8
-
-    # AblationCAM and ScoreCAM have batched implementations.
-    # You can override the internal batch size for faster computation.
-    cam.batch_size = 32
-
-    grayscale_cam = cam(input_tensor=input_tensor,
-                        target_category=target_category)
-
-    # Here grayscale_cam has only one image in the batch
-    grayscale_cam = grayscale_cam[0, :]
-
-    cam_image = show_cam_on_image(rgb_img, grayscale_cam)
-    cv2.imwrite(f'cam_cam.jpg', cam_image)

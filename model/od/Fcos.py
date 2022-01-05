@@ -1,9 +1,10 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from model.modules.modules import init_conv_random_normal, ScaleExp
+from model.modules.modules import init_conv_random_normal, ScaleExp, init_conv_kaiming
 from utill.utills import model_info
 from model.backbone.resnet50 import ResNet50
+from model.od.proposed import HISFCOSHead
 from model.backbone.efficientnetv1 import EfficientNetV1
 from typing import List
 
@@ -32,7 +33,9 @@ class FCOS(nn.Module):
         else:
             self.backbone = ResNet50(3)
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
-        self.head = HeadFCOS(feature, num_class, 0.01)
+        # self.head = HeadFCOS(feature, num_class, 0.01)
+
+        self.head = HISFCOSHead(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
 
         def freeze_bn(module):
@@ -61,22 +64,23 @@ class FeaturePyramidNetwork(nn.Module):
         self.P5 = nn.Conv2d(in_channel[0], feature, 1, 1, 'same')
         self.P4 = nn.Conv2d(in_channel[1], feature, 1, 1, 'same')
         self.P3 = nn.Conv2d(in_channel[2], feature, 1, 1, 'same')
-        self.P5_Up = nn.Upsample(2)
-        self.P4_Up = nn.Upsample(2)
+        self.P5_Up = nn.Upsample(scale_factor=2)
+        self.P4_Up = nn.Upsample(scale_factor=2)
         self.P5_c1 = nn.Conv2d(feature, feature, 3, 1, 'same')
         self.P4_c1 = nn.Conv2d(feature, feature, 3, 1, 'same')
         self.P3_c1 = nn.Conv2d(feature, feature, 3, 1, 'same')
         self.P6_c1 = nn.Conv2d(feature, feature, 3, 2, 3//2)
         self.P7_c1 = nn.Conv2d(feature, feature, 3, 2, 3//2)
         self.act = nn.ReLU(True)
-        self.apply(self.init_conv_kaiming)
+        self.apply(init_conv_kaiming)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         c3, c4, c5 = x
+
         p5 = self.P5(c5)  # 16
         p4_c = self.P4(c4)  # 32
-        p3_c = self.P3(c3)  # 64
 
+        p3_c = self.P3(c3)  # 64
         p4 = self.P5_Up(p5)  # 16 >32
         p4 = torch.add(p4, p4_c)   # 32+32
         p4 = self.P4_c1(p4)
@@ -139,7 +143,7 @@ if __name__ == '__main__':  # flop51.69G -> 29M mAP ->  78.7
     # model = FCOS(in_channel=[320, 112, 40], num_class=20, feature=256, efficientnet= True).to(device)
     # a = torch.rand(1,3,512, 512).to(device)
     tns = torch.rand(1, 3, 512, 512).to(device)
-    model_info(model, 1, 3, 800, 1024, device)
+    model_info(model, 1, 3, 512, 512, device)
 
     # from torch.utils.tensorboard import SummaryWriter
     # import os

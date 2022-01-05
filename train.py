@@ -30,9 +30,9 @@ WEIGHT_DECAY = 0.0001
 # mode = 'FCOS'
 mode = 'proposed'
 if mode == 'FCOS':
-    model_name = 'FCOS_org_bn16_a3'
+    model_name = 'FCOS_head_fix'
 else:
-    model_name = 'test_head_t3'
+    model_name = 'test_head_his_fpn'
 opt = 'SGD'
 amp_enabled = True
 ddp_enabled = False

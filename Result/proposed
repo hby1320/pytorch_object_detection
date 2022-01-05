@@ -514,3 +514,53 @@ mAP=====>0.814
 2 : 80.8 3 :80.3 5 80.2 7: 0.796
 2021-12-18 dilated rate :3 5 7 mix :
 backbone test feature-extractor
+
+
+
+----------------------------------FCOS only
+ap for aeroplane is 0.8312657089982235
+ap for bicycle is 0.8547688272798446
+ap for bird is 0.8133140384966795
+ap for boat is 0.7246056279347672
+ap for bottle is 0.6068472666327419
+ap for bus is 0.8327409311375505
+ap for car is 0.8768226027772215
+ap for cat is 0.9171713124392742
+ap for chair is 0.578457251550633
+ap for cow is 0.8185750056624047
+ap for diningtable is 0.6425249104370374
+ap for dog is 0.8816648207127347
+ap for horse is 0.8605317575324013
+ap for motorbike is 0.8232833472275414
+ap for person is 0.8384673256920225
+ap for pottedplant is 0.5387690712935751
+ap for sheep is 0.8193378893992265
+ap for sofa is 0.7473745218152505
+ap for train is 0.8791675147006568
+ap for tvmonitor is 0.7940462476980634
+mAP=====>0.784
+
+---------------------------fcos_head-change
+
+ap for aeroplane is 0.8283798973287009
+ap for bicycle is 0.8514292356788697
+ap for bird is 0.8118908988914444
+ap for boat is 0.6868736993734859
+ap for bottle is 0.6353819341185838
+ap for bus is 0.8659138409779581
+ap for car is 0.8780278107193754
+ap for cat is 0.9103520091645982
+ap for chair is 0.5802446814923534
+ap for cow is 0.8138753745024894
+ap for diningtable is 0.6724095065584353
+ap for dog is 0.8852723179686932
+ap for horse is 0.8555882367815382
+ap for motorbike is 0.8369386277803297
+ap for person is 0.8361231573421722
+ap for pottedplant is 0.49749423449067853
+ap for sheep is 0.8420376967547634
+ap for sofa is 0.7285726232387176
+ap for train is 0.8673159322302442
+ap for tvmonitor is 0.7913956835762138
+mAP=====>0.784
+ fps=tensor([54.5352], device='cuda:0')
