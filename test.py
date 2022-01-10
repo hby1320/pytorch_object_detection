@@ -278,6 +278,6 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/FCOS_head_fix_49.pth'))
+        model.load_state_dict(torch.load('./checkpoint/test_head_his_fpn_50.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)

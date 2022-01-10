@@ -4,22 +4,20 @@ from torch.utils.data import DataLoader, ConcatDataset
 import torch.utils.tensorboard
 from tqdm import tqdm
 import torch
-from dataset.pascalvoc import PascalVoc
 from model.modules.head import FCOSGenTargets
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS
 from model.loss import FCOSLoss
 from model.od.proposed import HalfInvertedStageFCOS
-from utill.utills import model_info, PolyLR, voc_collect
 from torch.optim import SGD, Adam
-from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 from torch.optim.swa_utils import AveragedModel, SWALR
 import numpy as np
-from torchvision.transforms import transforms
-import random
-from test import evaluate
 from data.augment import Transforms
-
+from utill.utills import model_info, PolyLR, voc_collect
+from dataset.pascalvoc import PascalVoc
+from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
+from torchvision.transforms import transforms
+from test import evaluate
 
 EPOCH = 50
 batch_size = 16
@@ -41,7 +39,7 @@ Transform = Transforms()
 # Transform = None
 
 if __name__ == '__main__':
-    # DDP setting
+    #  DDP setting
     if ddp_enabled:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
@@ -51,8 +49,7 @@ if __name__ == '__main__':
     else:
         local_rank = 0
         world_size = 0
-
-    # Device setting
+    #  Device setting
     if torch.cuda.is_available():
         torch.cuda.set_device(local_rank)
         device = torch.device('cuda', local_rank)

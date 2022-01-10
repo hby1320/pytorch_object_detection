@@ -3,7 +3,6 @@ Lr 1e-2
 WD 0.0001
 warm-up
 
-
 ==========================================================================================================================================================================
 Layer (type:depth-idx)                        Input Shape               Output Shape              Param #                   Kernel Shape              Mult-Adds
 ==========================================================================================================================================================================
@@ -504,7 +503,6 @@ mAP=====>0.814
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.595
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.696
 
-
 2021-12-15 07:50 -> HISBlock structure ( Element sum last _>79.3 오히려 떨어짐
 2021-12-15 07:50 -> HISBlock structure (cat-add) -> 78.9
 2021-12-16 08:00 -> HISblock test2  0.798 /
@@ -540,8 +538,7 @@ ap for train is 0.8791675147006568
 ap for tvmonitor is 0.7940462476980634
 mAP=====>0.784
 
----------------------------fcos_head-change
-
+---------------------------fcos_head-change  + mAP 0
 ap for aeroplane is 0.8283798973287009
 ap for bicycle is 0.8514292356788697
 ap for bird is 0.8118908988914444
@@ -562,5 +559,27 @@ ap for sheep is 0.8420376967547634
 ap for sofa is 0.7285726232387176
 ap for train is 0.8673159322302442
 ap for tvmonitor is 0.7913956835762138
-mAP=====>0.784
- fps=tensor([54.5352], device='cuda:0')
+mAP=====>0.784 fps=54.53
+
+ ---------------------------fcos_HISblock base FPN(TOP-down + Bottom-Up -> + mAP 2.0
+ap for aeroplane is 0.8507040943993829
+ap for bicycle is 0.8738127285108874
+ap for bird is 0.8539163618632641
+ap for boat is 0.7635509778030074
+ap for bottle is 0.6702428808548606
+ap for bus is 0.8595299207955798
+ap for car is 0.8908739581977658
+ap for cat is 0.9120848217896517
+ap for chair is 0.586482817936298
+ap for cow is 0.8284170688750463
+ap for diningtable is 0.7097327805608276
+ap for dog is 0.8988105904409596
+ap for horse is 0.8799063454955778
+ap for motorbike is 0.8552664523862493
+ap for person is 0.8566096891752814
+ap for pottedplant is 0.5459331285043659
+ap for sheep is 0.8507579143216715
+ap for sofa is 0.7332372933357565
+ap for train is 0.8977402531039189
+ap for tvmonitor is 0.771173210032456
+mAP=====>0.804 fps= 38.96
