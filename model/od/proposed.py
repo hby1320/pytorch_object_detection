@@ -325,7 +325,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
     model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
-
+    import torch.nn as n
+    nn.Softmax
     # from torch.utils.tensorboard import SummaryWriter
     # import os
     # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'test_1'))

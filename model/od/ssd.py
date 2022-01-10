@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from model.backbone.vgg16 import VGG16
 from utill.utills import model_info
+from itertools import product
 
 
 class SSD512(nn.Module):
@@ -21,6 +21,7 @@ class SSD512(nn.Module):
         super(SSD512, self).__init__()
         self.scale_weight = nn.Parameter(torch.ones(512) * 20)
         self.backbone = VGG16()
+        self.bn1 = nn.BatchNorm2d(512)
         self.maxpool = nn.MaxPool2d(kernel_size = 3,stride = 1, padding = 1, ceil_mode = False)
         self.block6 = nn.Conv2d(in_channels = 512,
                                out_channels = 1024,
@@ -35,67 +36,94 @@ class SSD512(nn.Module):
                                 stride = 1
                                 )
         self.ReLU2 = nn.ReLU(inplace = True)
-        self.block8 = SSDBlock(1024, 512, 2)
-        self.block9 = SSDBlock(512, 256, 2)
-        self.block10 = SSDBlock2(256, 256)
-        self.block11 = SSDBlock2(256, 256)
+        self.extract = ExtractModule(1024)
+
+
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        block4, block5 = self.backbone(x)
-        block4 = self.scale_weight.view(1, -1, 1, 1) * F.normalize(block4)
-        block5 = self.maxpool(block5)
-        block6 = self.block6(block5)
-        block6 = self.ReLU1(block6)
-        block7 = self.block7(block6)
-        block7 = self.ReLU2(block7)
-        block8 = self.block8(block7)
-        block9 = self.block9(block8)
-        block10 = self.block10(block9)
-        block11 = self.block11(block10)
+        conv4_3, conv5_3 = self.backbone(x)
+        conv4_3 = self.bn1(conv4_3)
+        x2, x3, x4, x5 = self.extract(conv5_3)
 
-        return block4, block7, block8, block9, block10, block11
+        return conv4_3, x2, x3, x4, x5
 
 
-class SSDBlock(nn.Module):
-    def __init__(self, in_ch:int, out_ch:int, st:int) -> torch.Tensor:
-        super(SSDBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels = in_ch,
-                               out_channels = out_ch//2,
-                               kernel_size = 1)
-        self.ReLU1 = nn.ReLU(inplace = True)
-        self.conv2 = nn.Conv2d(in_channels = out_ch//2,
-                               out_channels = out_ch,
-                               kernel_size = 3,
-                               stride = st,
-                               padding = 1)
-        self.ReLU2 = nn.ReLU(inplace = True)
+class ExtractModule(nn.Module):
+    def __init__(self, in_ch:int, middle:int, out_ch:int,  st, pad:int) -> torch.Tensor:
+        super(ExtractModule, self).__init__()
+        self.extract_module_1 = nn.Conv2d(in_ch, middle, 1)
+        self.extract_module_2 = nn.Conv2d(middle, out_ch, 3, st, pad)
+
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x)
-        x = self.ReLU1(x)
-        x = self.conv2(x)
-        x = self.ReLU2(x)
+        x = self.extract_module_1(x)
+        x = self.extract_module_1(x)
         return x
 
 
-class SSDBlock2(nn.Module):
-    def __init__(self, in_ch:int, out_ch:int) -> torch.Tensor:
-        super(SSDBlock2, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels = in_ch,
-                               out_channels = out_ch//2,
-                               kernel_size = 1)
-        self.ReLU1 = nn.ReLU(inplace = True)
-        self.conv2 = nn.Conv2d(in_channels = out_ch//2,
-                               out_channels = out_ch,
-                               kernel_size = 3)
-        self.ReLU2 = nn.ReLU(inplace = True)
+class loc_conf(nn.Module):
+    def __init__(self, num_feature, num_class=21, aspect_ratio=4) -> torch.Tensor:
+        super(loc_conf, self).__init__()
+        self.loc_layer = nn.Conv2d(num_feature, aspect_ratio*4, 3, 1, 1)
+        self.conf_layer = nn.Conv2d(num_feature, num_class * 4, 3, 1, 1)
 
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        x = self.conv1(x)
-        x = self.ReLU1(x)
-        x = self.conv2(x)
-        x = self.ReLU2(x)
-        return x
+    def forward(self, x) -> torch.Tensor:
+        return self.loc_layer(x), self.conf_layer(x)
+
+
+class ssd_L2Norm(nn.Module):
+    def __init__(self, in_ch, scale=20):
+        super(ssd_L2Norm, self).__init__()
+        self.weight = nn.Parameter(torch.Tensor(in_ch))
+        self.scale = scale
+        self.reset_parameters()  # parameter init
+        self.esp = 1e-10
+
+    def reset_parameters(self):
+        nn.init.constant_(self.weight, self.scale) ## weight value == scale
+
+    def forward(self, x) -> torch.Tensor:
+        norm = x.pow(2).sum(dim=1, keepdim=True).sqrt() + self.esp
+        x = torch.div(x, norm)
+        weights = self.weight.unsqeeze(0).unsqeeze(2).unsqeeze(3).expand_as(x)
+        out = weights * x
+        return out
+
+
+class ssd_default_box(nn.Module):
+    def __init__(self, img_size=300, feature_map_size=None, strides=[8, 16, 32, 64, 100, 300],
+                 min_size=[30, 60, 111, 162, 213, 264], max_size=[60, 111, 162, 213, 264, 315], aspect_ratios=[]):
+        super(ssd_default_box, self).__init__()
+        if feature_map_size is None:
+            feature_map_size = [38, 19, 10, 5, 3, 1]
+        self.img_size = img_size
+        self.feature_maps_size = feature_map_size
+        self.stride = strides
+        self.min_size = min_size
+        self.max_size = max_size
+        self.aspect_ratios = aspect_ratios
+
+    def make_dbox_list(self):
+        mean = []
+        for k, f in enumerate(self.feature_maps_size):  # idx / [38, 19, 10, 5, 3, 1]
+            for i, j in product(range(f), repeat=2):
+                f_k = self.img_size / self.stride[k]
+
+                cx = (j + 0.5) / f_k
+                cy = (i + 0.5) / f_k
+
+                s_k = self.min_size[k]/self.img_size
+                mean += [cx, cy, s_k, s_k]
+
+                s_k_prime = torch.sqrt(s_k*(self.max_size[k]/self.img_size))
+                mean += [cx, cy, s_k_prime, s_k_prime]
+
+                for aspect in self.aspect_ratios[k]:
+                    mean += [cx, cy, s_k * torch.sqrt(aspect), s_k / torch.sqrt(aspect)]
+                    mean += [cx, cy, s_k / torch.sqrt(aspect), s_k * torch.sqrt(aspect)]
+
+        output = torch.Tensor(mean).view(-1, 4).clip(max=1, min=0)
+        return output
 
 
 if __name__ == '__main__':
@@ -104,8 +132,8 @@ if __name__ == '__main__':
     dumy = torch.Tensor(1,3,512,512).to(device)
     model_info(model, 1, 3, 300, 300,device)
 
-    from torchvision.models.detection import ssd300_vgg16
-    from torchvision.models.detection.anchor_utils import DefaultBoxGenerator
+    # from torchvision.models.detection import ssd300_vgg16
+    # from torchvision.models.detection.anchor_utils import DefaultBoxGenerator
     #
     # anchor_generator = DefaultBoxGenerator([[2], [2, 3], [2, 3], [2, 3], [2], [2]],
     #                                        scales=[0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05],
