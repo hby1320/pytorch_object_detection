@@ -4,7 +4,7 @@ import numpy as np
 from typing import List
 from torchinfo import summary
 # from thop import profile
-
+from yaml import safe_load, FullLoader, load
 
 def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
     model.eval()
@@ -222,7 +222,6 @@ class DataEncoder:
         y1 = bboxes[:, 1]
         x2 = bboxes[:, 2]
         y2 = bboxes[:, 3]
-
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
         _, order = scores.sort(0, descending = True)  # confidence 순 정렬
         keep = []
@@ -237,7 +236,6 @@ class DataEncoder:
             yy1 = y1[order[1:]].clamp(min = y1[i])
             xx2 = x2[order[1:]].clamp(max = x2[i])
             yy2 = y2[order[1:]].clamp(max = y2[i])
-
             w = (xx2 - xx1 + 1).clamp(min = 0)
             h = (yy2 - yy1 + 1).clamp(min = 0)
             inter = w * h
@@ -254,3 +252,16 @@ class DataEncoder:
                 break
             order = order[ids + 1]
         return torch.LongTensor(keep)
+
+
+def load_config(cfg: str = f'../config/main.yaml') -> dict:
+    with open(cfg) as f:
+        main = safe_load(f)
+        dataset = main['dataset']
+    with open(main[dataset]) as f:
+        config = load(f, Loader=FullLoader)
+    config['model'] = {}
+    config['model']['name'] = main['model']
+    config['model']['amp'] = main['amp']
+    config['model']['ddp'] = main['ddp_enabled']
+    return config

@@ -4,9 +4,10 @@ from model.modules.modules import \
     PointWiseConv, DepthWiseConv2d, ScaleExp, init_conv_random_normal, SEBlock, DilatedDepthWiseConv2d
 from model.backbone.resnet50 import ResNet50, ResNet50v2
 from utill.utills import model_info
+# from model.od.Fcos import HeadFCOS
 from typing import List
 import numpy as np
-from torchvision.ops import deform_conv
+# from torchvision.ops import deform_conv
 
 
 """
@@ -56,7 +57,7 @@ class HalfInvertedStageFCOS(nn.Module):
         self.backbone_freeze = bn_freeze
         self.fpn = HalfInvertedStageFPN(feature_map, feature)
         self.head = HISFCOSHead(feature, num_classes, 0.01)
-
+        # self.head = HeadFCOS(feature, num_classes, 0.01)
         def freeze_bn(module: nn.Module):
             if isinstance(module, nn.BatchNorm2d):
                 module.eval()
@@ -84,7 +85,7 @@ class HisBlock(nn.Module):
         self.conv2 = nn.Conv2d(feature, feature//2, 1, 1, 'same')
         self.conv3 = nn.Conv2d(feature, feature//2, 3, 1, 'same', bias=False)
         self.conv4 = nn.Conv2d(feature, feature, 3, 1, 'same', d_rate, bias=False)
-        self.conv1_1 = DilatedDepthWiseConv2d(feature//2, 3, 1, d_rate,  False)
+        self.conv1_1 = DepthWiseConv2d(feature//2, 3, 1,  False)
         self.conv1_2 = SEBlock(feature//2, beta)
         self.bn1 = nn.BatchNorm2d(feature//2)
         self.act1 = nn.SiLU(True)
@@ -176,9 +177,9 @@ class HalfInvertedStageFPN(nn.Module):
         self.gn1 = nn.GroupNorm(32, feature)
         self.gn2 = nn.GroupNorm(32, feature)
         self.gn3 = nn.GroupNorm(32, feature)
-        # self.gn1 = nn.BatchNorm2d(feature)
-        # self.gn2 = nn.BatchNorm2d(feature)
-        # self.gn3 = nn.BatchNorm2d(feature)
+        self.gn1 = nn.BatchNorm2d(feature)
+        self.gn2 = nn.BatchNorm2d(feature)
+        self.gn3 = nn.BatchNorm2d(feature)
         self.act1 = nn.ReLU(True)
         self.act2 = nn.ReLU(True)
         self.act3 = nn.ReLU(True)
@@ -264,7 +265,7 @@ class HalfInvertedStageFPN(nn.Module):
         p1_2 = self.down_sample6(p2)
         p1 = torch.add(p1_2, x5_1)
         p1 = self.HisBlock7(p1)
-        return p5, p4, p3, p2, p1
+        return p5, p4, p3, p2, p1  # p3 p4 p5 p6 p7 (Stride)
 
 
 class HISFCOSHead(nn.Module):
@@ -274,18 +275,17 @@ class HISFCOSHead(nn.Module):
         self.prior = prior
         cls_branch = []
         reg_branch = []
-        # self.pw1 = PointWiseConv(feature, 2*feature)
-        # self.pw2 = PointWiseConv(2 * feature, feature, bs=True)
-        # self.dw1 = DepthWiseConv2d(2*feature, 3)
-        # self.gn1 = nn.GroupNorm(32, 2 * feature)
-        # self.gn2 = nn.GroupNorm(32, 2 * feature)
-        # self.act1 = nn.ReLU(True)
-        # self.act2 = nn.SiLU(True)
-        for i in range(4):
+        self.pw1 = PointWiseConv(feature, 2*feature)
+        self.pw2 = PointWiseConv(2 * feature, feature, bs=True)
+        self.dw1 = DepthWiseConv2d(2*feature, 3)
+        self.gn1 = nn.GroupNorm(32, 2 * feature)
+        self.gn2 = nn.GroupNorm(32, 2 * feature)
+        self.act1 = nn.ReLU(True)
+        self.act2 = nn.SiLU(True)
+        for i in range(1):
             cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
             cls_branch.append(nn.GroupNorm(32, feature))
             cls_branch.append(nn.ReLU(True))
-
             reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding='same', bias=False))
             reg_branch.append(nn.GroupNorm(32, feature))
             reg_branch.append(nn.ReLU(True))
@@ -296,8 +296,7 @@ class HISFCOSHead(nn.Module):
         self.cls_logits = nn.Conv2d(feature, self.class_num, kernel_size=3, padding=1)
         self.cnt_logits = nn.Conv2d(feature, 1, kernel_size=3, padding=1)
         self.reg_pred = nn.Conv2d(feature, 4, kernel_size=3, padding=1)
-        # self.apply(init_conv_random_normal)
-        nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))
+        nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))  # 제거시 서능 저하
         self.scale_exp = nn.ModuleList([ScaleExp(1.2) for _ in range(5)])
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -305,14 +304,14 @@ class HISFCOSHead(nn.Module):
         cnt_logits = []
         reg_preds = []
         for index, feature in enumerate(inputs):
-            # x = self.pw1(feature)
-            # x = self.gn1(x)
-            # x = self.act1(x)
-            # x = self.dw1(x)
-            # x = self.gn2(x)
-            # x = self.act2(x)
-            # x = self.pw2(x)
-            # feature = torch.add(x, feature)
+            x = self.pw1(feature)
+            x = self.gn1(x)
+            x = self.act1(x)
+            x = self.dw1(x)
+            x = self.gn2(x)
+            x = self.act2(x)
+            x = self.pw2(x)
+            feature = torch.add(x, feature)
             cls_conv_out = self.cls_conv(feature)
             reg_conv_out = self.reg_conv(feature)
             cls_logits.append(self.cls_logits(cls_conv_out))
@@ -324,11 +323,18 @@ class HISFCOSHead(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
-    model_info(model, 1, 3, 512, 512, device)  # flop35.64G  para0.03G
+    model_info(model, 1, 3, 512, 512, device, depth=1)  # flop35.64G  para0.03G
     import torch.nn as n
-    nn.Softmax
     # from torch.utils.tensorboard import SummaryWriter
     # import os
     # writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', 'test_1'))
     # writer.add_graph(model, tns)
     # writer.close()
+
+    # 21, 353, 254, 784  (23,508,032) # 32,157,022
+    # 4, 160, 376, 832 3,868,672
+    # 26,059,060,432 4,780,318
+
+    # 25, 459, 481, 344 (23,508,032) # 32,661,310
+    # 7, 350, 107, 744 (7,648,224)
+    # 8, 207, 372, 496 1,507,358

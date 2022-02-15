@@ -1,0 +1,10 @@
+dataset : voc
+model : HISFCOS
+voc : config/voc.yaml
+coco : config/coco.yaml
+amp : True
+ddp_enabled : False
+
+
+
+

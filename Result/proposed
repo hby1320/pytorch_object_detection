@@ -490,6 +490,28 @@ ap for train is 0.9109604534118219
 ap for tvmonitor is 0.7937027698236008
 mAP=====>0.814
 
+ap for aeroplane is 0.8547212106872073
+ap for bicycle is 0.8867425894053598
+ap for bird is 0.8380207747559475
+ap for boat is 0.7617270942061825
+ap for bottle is 0.6578327093179325
+ap for bus is 0.8829398807579416
+ap for car is 0.8903821249998661
+ap for cat is 0.9333504440376166
+ap for chair is 0.5896672131698784
+ap for cow is 0.8480653092385472
+ap for diningtable is 0.7245262822719045
+ap for dog is 0.899756581301061
+ap for horse is 0.9006517187281355
+ap for motorbike is 0.8696731736681923
+ap for person is 0.8518201508592762
+ap for pottedplant is 0.5636369775247223
+ap for sheep is 0.8526999910226865
+ap for sofa is 0.7410021135536584
+ap for train is 0.9134938052261634
+ap for tvmonitor is 0.8163996387430814
+mAP=====>0.814 fps=52.2183
+
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.377
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.562
  Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.405

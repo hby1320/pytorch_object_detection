@@ -4,7 +4,7 @@ import torch.nn as nn
 from model.modules.modules import init_conv_random_normal, ScaleExp, init_conv_kaiming
 from utill.utills import model_info
 from model.backbone.resnet50 import ResNet50
-from model.od.proposed import HISFCOSHead
+# from model.od.proposed import HISFCOSHead
 from model.backbone.efficientnetv1 import EfficientNetV1
 from typing import List
 
@@ -35,7 +35,7 @@ class FCOS(nn.Module):
         self.FPN = FeaturePyramidNetwork(in_channel, feature)
         # self.head = HeadFCOS(feature, num_class, 0.01)
 
-        self.head = HISFCOSHead(feature, num_class, 0.01)
+        self.head = HeadFCOS(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
 
         def freeze_bn(module):
@@ -76,19 +76,15 @@ class FeaturePyramidNetwork(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         c3, c4, c5 = x
-
         p5 = self.P5(c5)  # 16
         p4_c = self.P4(c4)  # 32
-
         p3_c = self.P3(c3)  # 64
         p4 = self.P5_Up(p5)  # 16 >32
         p4 = torch.add(p4, p4_c)   # 32+32
         p4 = self.P4_c1(p4)
-
         p3 = self.P4_Up(p4)
         p3 = torch.add(p3, p3_c)
         p3 = self.P3_c1(p3)
-
         p5 = self.P5_c1(p5)
         p6 = self.P6_c1(p5)
         p7 = self.P7_c1(self.act(p6))
@@ -140,10 +136,7 @@ class HeadFCOS(nn.Module):
 if __name__ == '__main__':  # flop51.69G -> 29M mAP ->  78.7
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = FCOS(in_channel=[2048, 1024, 512], num_class=20, feature=256).to(device)
-    # model = FCOS(in_channel=[320, 112, 40], num_class=20, feature=256, efficientnet= True).to(device)
-    # a = torch.rand(1,3,512, 512).to(device)
-    tns = torch.rand(1, 3, 512, 512).to(device)
-    model_info(model, 1, 3, 512, 512, device)
+    model_info(model, 1, 3, 512, 512, device, depth=1)
 
     # from torch.utils.tensorboard import SummaryWriter
     # import os
