@@ -44,7 +44,8 @@ if __name__ == '__main__':
     cfg = load_config('./config/main.yaml')
     name = cfg['model']['name']
     day = datetime.date.today()
-    save_name = name + '_' +day.strftime(f"%m-%d-%H-%M")
+    save_name = name + '_' + day.strftime(f"%m-%d-%H-%M")
+
     #  DDP setting
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -132,7 +133,7 @@ if __name__ == '__main__':
         writer = None
 
     # 5 Train & val
-    for epoch in tqdm(range(start_epoch, cfg[name]['batch_size']), desc='Epoch', disable=False if local_rank == 0 else True):
+    for epoch in tqdm(range(start_epoch, cfg[name]['Epoch']), desc='Epoch', disable=False if local_rank == 0 else True):
 
         # if torch.utils.train_interupter.train_interupter():
         #     print('Train interrupt occurs.')
