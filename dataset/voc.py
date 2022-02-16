@@ -161,6 +161,7 @@ class VOCDataset(torch.utils.data.Dataset):
 
         return batch_imgs, batch_boxes, batch_classes
 
+
 if __name__=="__main__":
     pass
     eval_dataset = VOCDataset(root_dir='../data/voc/VOCdevkit/VOC2007', resize_size=[512, 512], split='train',

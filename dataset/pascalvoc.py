@@ -27,14 +27,11 @@ class PascalVoc(torchvision.datasets.VOCDetection):
     def __getitem__(self, index):
         image = Image.open(self.images[index]).convert('RGB')
         target = self.parse_voc_xml(ET.parse(self.annotations[index]).getroot())  # xml파일 분석하여 dict으로 받아오기
-
         targets = []  # 바운딩 박스 좌표
         labels = []  # 바운딩 박스 클래스
-
         voc_class = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow",
                      "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train",
-                     "tvmonitor"
-                     ]  # Class Name
+                     "tvmonitor"]  # Class Name
 
         # 바운딩 박스 정보 받아오기
         for t in target['annotation']['object']:
@@ -53,7 +50,8 @@ class PascalVoc(torchvision.datasets.VOCDetection):
 
         return {'img': image, 'targets': targets, 'lables': labels}
 
-    def parse_voc_xml(self, node: ET.Element) -> Dict[str, any]: #parse_voc_xml[str, any]:  # xml 파일을 dictionary로 반환
+    def parse_voc_xml(self, node: ET.Element) -> Dict[str, any]:
+        #parse_voc_xml[str, any]:  # xml 파일을 dictionary로 반환
         voc_dict: Dict[str, any] = {}
         children = list(node)
         if children:

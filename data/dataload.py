@@ -1,3 +1,4 @@
+
 import torch
 import torchvision
 from torchvision.datasets import VOCDetection
@@ -17,9 +18,6 @@ from dataset.pascalvoc import PascalVoc
 from utill.utills import DataEncoder
 import cv2
 
-## ->FIX 복수의 데이터세트에서 사용가능하게 수정하기  voc폴더에 한번에 불러 올수 있도록 수정 XML 데이터 불러오기 ## YAML 사용해서 파일로 정리
-## -> coco 데이터세트도 동일하게 만들기
-##
 with open('../data/voc.yaml') as file:
     voc_data = yaml.load(file, Loader=yaml.FullLoader)
 
@@ -98,12 +96,7 @@ def data_set_show(img, targets, labels, classes):
     plt.show()
 
 
-
-
-
-
 if __name__ == '__main__':
-
     def voc_collect(samples):
         imgs = [sample['img'] for sample in samples]
         targets = [sample['targets'] for sample in samples]
@@ -111,7 +104,6 @@ if __name__ == '__main__':
         padded_imgs = torch.nn.utils.rnn.pad_sequence(imgs, batch_first=True)
         padded_targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True)
         padded_tlables = torch.nn.utils.rnn.pad_sequence(lables, batch_first=True)
-
         return padded_imgs, padded_targets, padded_tlables
 
     # transforms 적용하기

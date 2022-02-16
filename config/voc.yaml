@@ -1,13 +1,15 @@
 
 #dataset location # 2070 (num 4 batch 16) # 3090 (num 8 batch 32)
 dataset_setting:
-  class : 20
+  class_num : 20
   train_07 : './data/voc/VOCdevkit/VOC2007'
   train_12 : './data/voc/VOCdevkit/VOC2012'
   input : [512,512]
   type : 'trainval'
   pin_memory : True
   num_workers : 4
+  class: [ "aeroplane", "bicycle", "bird", "boat","bottle", "bus", "car", "cat", "chair", "cow",
+           "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor" ]
 
 # model info
 FCOS :

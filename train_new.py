@@ -134,6 +134,7 @@ if __name__ == '__main__':
                 lr = cfg[name]['optimizer']['lr'] * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr
+
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled=cfg['model']['amp']):
                 outputs = model(imgs)
