@@ -6,8 +6,6 @@ from utill.utills import model_info
 from model.modules.modules import StdConv, DepthWiseConv2d, PointWiseConv, SEBlock
 
 
-
-
 class MC_FCOS(nn.Module):
     """
     # Total params: 34,418,880
