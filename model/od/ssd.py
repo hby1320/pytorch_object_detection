@@ -98,10 +98,10 @@ class LocCofModule(nn.Module):
         return self.loc_layer(x), self.conf_layer(x)
 
 
-class ssd_default_box(nn.Module):
+class SSDDefaultBoxModule(nn.Module):
     def __init__(self, img_size=300, feature_map_size=None, strides=[8, 16, 32, 64, 100, 300],
                  min_size=[30, 60, 111, 162, 213, 264], max_size=[60, 111, 162, 213, 264, 315], aspect_ratios=[]):
-        super(ssd_default_box, self).__init__()
+        super(SSDDefaultBoxModule, self).__init__()
         if feature_map_size is None:
             feature_map_size = [38, 19, 10, 5, 3, 1]
         self.img_size = img_size
@@ -116,20 +116,15 @@ class ssd_default_box(nn.Module):
         for k, f in enumerate(self.feature_maps_size):  # idx / [38, 19, 10, 5, 3, 1]
             for i, j in product(range(f), repeat=2):
                 f_k = self.img_size / self.stride[k]
-
                 cx = (j + 0.5) / f_k
                 cy = (i + 0.5) / f_k
-
                 s_k = self.min_size[k]/self.img_size
                 mean += [cx, cy, s_k, s_k]
-
                 s_k_prime = torch.sqrt(s_k*(self.max_size[k]/self.img_size))
                 mean += [cx, cy, s_k_prime, s_k_prime]
-
                 for aspect in self.aspect_ratios[k]:
                     mean += [cx, cy, s_k * torch.sqrt(aspect), s_k / torch.sqrt(aspect)]
                     mean += [cx, cy, s_k / torch.sqrt(aspect), s_k * torch.sqrt(aspect)]
-
         output = torch.Tensor(mean).view(-1, 4).clip(max=1, min=0)
         return output
 
