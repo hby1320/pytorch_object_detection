@@ -31,16 +31,12 @@ class FeaturePyramid(nn.Module):
         self.P5_1 = StdConv(c5_size, feature_size, 1, 1, 0)
         self.P5_up = nn.Upsample(scale_factor=2, mode='nearest')
         self.P5_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-
         self.P4_1 = StdConv(c4_size, feature_size, 1, 1, 0)
         self.P4_up = nn.Upsample(scale_factor=2, mode='nearest')
         self.P4_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-
         self.P3_1 = StdConv(c3_size, feature_size, 1, 1, 0)
         self.P3_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-
         self.P6 = StdConv(c5_size, feature_size, 3, 2, 1)
-
         self.P7_1 = nn.ReLU(inplace=True)
         self.P7_2 = StdConv(feature_size, feature_size, 3, 2, 1)
 
@@ -128,7 +124,6 @@ class Anchor(nn.Module):
         if scales is None:
             self.scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
 
-
     def forward(self, img:torch.Tensor) -> torch.Tensor:
         img_shape = img.shape[:2]
         img_shape = np.array(img_shape)
@@ -150,12 +145,10 @@ class Anchor(nn.Module):
         else:
             return torch.from_numpy(all_anchor.astype(np.float32))
 
-
-
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = RetinaNet(80).to(device)
     model_info(model, 1, 3, 512, 512, device)
-    a = torch.rand(1, 3, 512, 512)
-    b = Anchor()(a)
-    print(b)
+    # a = torch.rand(1, 3, 512, 512)
+    # b = Anchor()(a)
+    # print(b)
