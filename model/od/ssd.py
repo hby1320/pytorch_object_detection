@@ -48,6 +48,7 @@ class SSD300(nn.Module):
         self.extra_layer2 = ExtractModule(512, 128, 256, 2, 1)
         self.extra_layer3 = ExtractModule(256, 128, 256)
         self.extra_layer4 = ExtractModule(256, 128, 256)
+        # Extra_Layer :
         self.loc_conf_layer1 = LocCofModule(512, num_class, 4)
         self.loc_conf_layer2 = LocCofModule(1024, num_class, 6)
         self.loc_conf_layer3 = LocCofModule(512, num_class, 6)
@@ -99,7 +100,7 @@ class LocCofModule(nn.Module):
 
 
 class SSDDefaultBoxModule(nn.Module):
-    def __init__(self, img_size=300, feature_map_size=None, strides=[8, 16, 32, 64, 100, 300],
+    def __init__(self, img_size=300, feature_map_size=None, strides=[8, 16, 32, 64, 128, 256],
                  min_size=[30, 60, 111, 162, 213, 264], max_size=[60, 111, 162, 213, 264, 315], aspect_ratios=[]):
         super(SSDDefaultBoxModule, self).__init__()
         if feature_map_size is None:
