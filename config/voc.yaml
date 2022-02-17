@@ -13,6 +13,8 @@ dataset_setting:
 
 # model info
 FCOS :
+  CannelofBackbone : [2048, 1024, 512]
+  channel : 256
   Epoch : 50
   batch_size : 16
   optimizer:
@@ -30,6 +32,8 @@ FCOS :
     - [512, 9999999]
 
 HISFCOS:
+  CannelofBackbone: [ 2048, 1024, 512 ]
+  channel: 256
   Epoch: 50
   batch_size: 16
   optimizer:
