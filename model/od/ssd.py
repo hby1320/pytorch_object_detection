@@ -56,6 +56,11 @@ class SSD300(nn.Module):
         self.loc_conf_layer5 = LocCofModule(256, num_class, 4)
         self.loc_conf_layer6 = LocCofModule(256, num_class, 4)
 
+        self.default_box = SSDDefaultBoxModule(300, [38, 19, 10, 5, 3, 1], [8, 16, 32, 64, 100, 300],
+                                               [30, 60, 111, 162, 213, 264], [60, 111, 162, 213, 264, 315]
+                                               [[2], [2, 3], [2, 3], [2, 3], [2], [2]])
+        self.mask_box_list = self.default_box.make_default_box_list()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out1, out2 = self.backbone(x)
         out1 = self.l2norm(out1)
@@ -100,27 +105,30 @@ class LocCofModule(nn.Module):
 
 
 class SSDDefaultBoxModule(nn.Module):
-    def __init__(self, img_size=300, feature_map_size=None, strides=[8, 16, 32, 64, 128, 256],
+    def __init__(self, img_size=300, feature_map_size=None, steps=[8, 16, 32, 64, 128, 256],
                  min_size=[30, 60, 111, 162, 213, 264], max_size=[60, 111, 162, 213, 264, 315], aspect_ratios=[]):
         super(SSDDefaultBoxModule, self).__init__()
         if feature_map_size is None:
             feature_map_size = [38, 19, 10, 5, 3, 1]
         self.img_size = img_size
         self.feature_maps_size = feature_map_size
-        self.stride = strides
+        self.num_priors = len(feature_map_size)
+        self.steps = steps
         self.min_size = min_size
         self.max_size = max_size
         self.aspect_ratios = aspect_ratios
 
-    def make_dbox_list(self):
+    def make_default_box_list(self):
         mean = []
         for k, f in enumerate(self.feature_maps_size):  # idx / [38, 19, 10, 5, 3, 1]
             for i, j in product(range(f), repeat=2):
-                f_k = self.img_size / self.stride[k]
+                f_k = self.img_size / self.steps[k]
+                # SSD paepr Cx Cy
                 cx = (j + 0.5) / f_k
                 cy = (i + 0.5) / f_k
                 s_k = self.min_size[k]/self.img_size
                 mean += [cx, cy, s_k, s_k]
+
                 s_k_prime = torch.sqrt(s_k*(self.max_size[k]/self.img_size))
                 mean += [cx, cy, s_k_prime, s_k_prime]
                 for aspect in self.aspect_ratios[k]:
