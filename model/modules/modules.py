@@ -178,3 +178,26 @@ def init_conv_kaiming(module):
 
         if module.bias is not None:
             nn.init.constant_(module.bias, 0)
+
+
+class MNBlock(nn.Module):
+    def __init__(self,
+                 in_ch: int,
+                 out_ch: int,
+                 kernal: int,
+                 dilated: int):
+        super(MNBlock, self).__init__()
+        self.DilatedDepthwiseConv = nn.Conv2d(in_ch, in_ch, kernal, 1, dilated, dilated, in_ch, False)
+        self.BN = nn.BatchNorm2d(in_ch)
+        self.PW1 = nn.Conv2d(in_ch,in_ch*4, 1, 1, 0, 1, 1, False)
+        self.ACT1 = nn.SiLU(True)
+        self.PW2 = nn.Conv2d(in_ch * 4, out_ch, 1, 1, 0, 1, 1, True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x1 = self.DilatedDepthwiseConv(x)
+        x1 = self.BN(x1)
+        x1 = self.PW1(x1)
+        x1 = self.ACT1(x1)
+        x1 = self.PW2(x1)
+        x1 = torch.add(x, x1)
+        return x1
