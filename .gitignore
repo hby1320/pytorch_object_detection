@@ -8,6 +8,7 @@ runs/
 *.jpg
 *.zip
 *.pth
+*.txt
 .idea
 
 # Byte-compiled / optimized / DLL files
@@ -135,3 +136,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .idea/
+*.png
