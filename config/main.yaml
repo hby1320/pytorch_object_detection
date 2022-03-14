@@ -1,5 +1,5 @@
 dataset : voc
-model : HISFCOS
+model : MNFCOS
 voc : config/voc.yaml
 coco : config/coco.yaml
 amp : True

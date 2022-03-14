@@ -11,17 +11,23 @@ from model.od.Fcos import FCOS
 from model.loss import FCOSLoss
 from model.od.proposed import HalfInvertedStageFCOS
 from torch.optim import SGD, Adam
-from utill.utills import load_config
+from utill.utills import load_config, voc_collect
 import numpy as np
+import torchvision.transforms as tfs
+from model.od.MNFcos import MNFCOS
 from data.augment import Transforms
 # from dataset.pascalvoc import PascalVoc
+from dataset.pascalvoc import PascalVoc
 Transform = Transforms()
 
 if __name__ == '__main__':
+    # Transform = tfs.Compose([tfs.ToTensor(),
+    #                          tfs.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    #                          tfs.Resize([512, 512])])
     cfg = load_config('./config/main.yaml')
     name = cfg['model']['name']
     day = datetime.date.today()
-    save_name = name + '_' + day.strftime(f"%m-%d-%H-%M")
+    save_name = name + '_' + day.strftime(f"%m-%d")
     #  DDP setting
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -46,26 +52,41 @@ if __name__ == '__main__':
     voc_12_train = VOCDataset(cfg['dataset_setting']['train_12'], cfg['dataset_setting']['input'],
                               cfg['dataset_setting']['type'], False, True, Transform)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+    # voc_07_train = PascalVoc(cfg['dataset_setting']['train_07'], '2007', cfg['dataset_setting']['type'],
+    #                          False, transforms=Transform)
+    # voc_12_train = PascalVoc(cfg['dataset_setting']['train_12'], '2012', cfg['dataset_setting']['type'],
+    #                          False, transforms=Transform)
+    # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+
     print(len(voc_07_train+voc_12_train))
     if cfg['model']['ddp']:
         sampler = torch.utils.data.DistributedSampler(voc_07_train+voc_12_train)
         shuffle = False
         pin_memory = False
-        train_dataloader = DataLoader(voc_07_train + voc_12_train, batch_size=cfg[name]['batch_size'], shuffle=shuffle,
+        train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=shuffle,
                                       sampler=sampler, num_workers=cfg['dataset_setting']['num_workers'],
                                       pin_memory=pin_memory, collate_fn=voc_07_train.collate_fn)
     else:
         sampler = False
-        train_dataloader = DataLoader(voc_07_train + voc_12_train, batch_size=cfg[name]['batch_size'], shuffle=True,
+        # train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=True,
+        #                               num_workers=cfg['dataset_setting']['num_workers'],
+        #                               collate_fn=voc_collect, worker_init_fn=np.random.seed(0),
+        #                               pin_memory=cfg['dataset_setting']['pin_memory'])
+        train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=True,
                                       num_workers=cfg['dataset_setting']['num_workers'],
                                       collate_fn=voc_07_train.collate_fn, worker_init_fn=np.random.seed(0),
                                       pin_memory=cfg['dataset_setting']['pin_memory'])
     nb = len(train_dataloader)
     # Model build
     if name == 'FCOS':
-        model = FCOS([2048, 1024, 512], 20, 256).to(device)
+        model = FCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
+                           cfg[name]['channel'],).to(device)
     elif name == 'HISFCOS':
-        model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
+        model = HalfInvertedStageFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
+                                      cfg[name]['channel'],).to(device)
+    elif name == 'MNFCOS':
+        model = MNFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'], cfg[name]['channel']).to(device)
+        # model = MNHeadFCOS([ 2048, 1024, 512 ], 20, 128).to(device)
     else:
         breakpoint()
     gen_target = FCOSGenTargets(strides=cfg[name]['stride'], limit_range=cfg[name]['range'])

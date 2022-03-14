@@ -49,14 +49,14 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.BaseFeatureUpSample = nn.Upsample(scale_factor=2)
         self.BaseFeatureDownSample = nn.MaxPool2d(2, 2)
         # self.C3MNblock = MNBlock(feature, feature, 3, 3)
-        self.P3MNblock = MNBlock(feature, feature, 3, 2)
-        self.P4MNblock = MNBlock(feature, feature, 3, 2)
+        self.P3MNblock = MNBlock(feature, feature, 3, 3)
+        self.P4MNblock = MNBlock(feature, feature, 3, 3)
         self.P4MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P5MNblock = MNBlock(feature, feature, 3, 2)
+        self.P5MNblock = MNBlock(feature, feature, 3, 3)
         self.P5MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P6MNblock = MNBlock(feature, feature, 3, 2)
+        self.P6MNblock = MNBlock(feature, feature, 3, 3)
         self.P6MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P7MNblock = MNBlock(feature, feature, 3, 2)
+        self.P7MNblock = MNBlock(feature, feature, 3, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         c3, c4, c5 = x
@@ -81,9 +81,7 @@ class LieghtWeightFeaturePyramid(nn.Module):
         p6 = self.P5MNblockDownSample(p5)  # 8
         p6 = torch.add(p6, c5_top)
         p6 = self.P6MNblock(p6)
-        p7 = self.P6MNblockDownSample(p6)
-        p7 = self.P7MNblock(p7)
-        return p3, p4, p5, p6, p7
+        return p3, p4, p5, p6
 
 
 class MNHeadFCOS(nn.Module):
@@ -111,7 +109,7 @@ class MNHeadFCOS(nn.Module):
         self.reg_pred = nn.Conv2d(feature, 4, kernel_size=3, padding=1)
 
         nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))
-        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
+        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(4)])
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         cls_logits = []
