@@ -65,7 +65,7 @@ def coords_origin_fcos(feature: torch.Tensor, strides: List[int]) -> torch.Tenso
     shifts_x = torch.arange(0, w * strides, strides, dtype=torch.float32)  # stride 만큼 간격
     shifts_y = torch.arange(0, h * strides, strides, dtype=torch.float32)
 
-    shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x, indexing='xy')
+    shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x, indexing='ij')
     shift_x = torch.reshape(shift_x, [-1])  # Number of pixel  -> [H*W]
     shift_y = torch.reshape(shift_y, [-1])  # Number of pixel  -> [H*W]
     coords = torch.stack([shift_x, shift_y], dim=-1) + strides // 2  # Number of pixel  -> [H*W]
