@@ -62,11 +62,11 @@ class LieghtWeightFeaturePyramid(nn.Module):
         c3, c4, c5 = x
         c5_top = self.C5DownSample(c5) # 8
         c5_top = self.C5PW1(c5_top)
+        c5 = self.C5PW2(c5)  # 32
         c5 = self.C5UpSample(c5) # 32
-        c5 = self.C5PW2(c5) # 32
         c4 = self.C4PW(c4) # 32
-        c3 = self.C3DownSample(c3) # 32
         c3 = self.C3PW(c3) #32
+        c3 = self.C3DownSample(c3) # 32
         # c3_MN = self.C3MNblock(c3)
         base_feature = torch.concat([c5, c4, c3], dim=1)  # 32
         base_feature = self.BaseFeature(base_feature)
@@ -79,7 +79,7 @@ class LieghtWeightFeaturePyramid(nn.Module):
         p5 = self.P4MNblockDownSample(p4)  # 16
         p5 = self.P5MNblock(p5)
         p6 = self.P5MNblockDownSample(p5)  # 8
-        p6 = torch.add(p6, c5_top)
+        # p6 = torch.add(p6, c5_top)
         p6 = self.P6MNblock(p6)
         return p3, p4, p5, p6
 
