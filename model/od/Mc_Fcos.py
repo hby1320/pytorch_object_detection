@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch
 from typing import List
 from utill.utills import model_info
-from model.modules.modules import StdConv, DepthWiseConv2d, PointWiseConv, SEBlock
+from model.modules.modules import ConvBnAct, DepthWiseConv2d, PointWiseConv, SEBlock
 
 
 class MC_FCOS(nn.Module):
@@ -24,7 +24,7 @@ class MC_FCOS(nn.Module):
                                out_feature=feature)
         self.ffm = FeatureFusionModule(feature_lv=feature_lv,
                                        features=feature)
-        self.tf1 = StdConv(2048, feature, 1, 1, 1//2, 'swish')
+        self.tf1 = ConvBnAct(2048, feature, 1, 1, 1 // 2, 'swish')
         self.fpn = FPN(feautre=feature)
         self.refine = FeatureRefine(feature=feature)
         self.head = Detector_head(num_class = num_classes,

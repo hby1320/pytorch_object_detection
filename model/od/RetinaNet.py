@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model.modules.modules import StdConv
+from model.modules.modules import ConvBnAct
 from model.backbone.resnet50 import ResNet50
 from utill.utills import model_info, shift_xy, generate_anchor
 import numpy as np
@@ -28,17 +28,17 @@ class RetinaNet(nn.Module):
 class FeaturePyramid(nn.Module):
     def __init__(self, c3_size: int, c4_size: int, c5_size: int, feature_size=256):
         super(FeaturePyramid, self).__init__()
-        self.P5_1 = StdConv(c5_size, feature_size, 1, 1, 0)
+        self.P5_1 = ConvBnAct(c5_size, feature_size, 1, 1, 0)
         self.P5_up = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P5_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-        self.P4_1 = StdConv(c4_size, feature_size, 1, 1, 0)
+        self.P5_2 = ConvBnAct(feature_size, feature_size, 3, 1, 1)
+        self.P4_1 = ConvBnAct(c4_size, feature_size, 1, 1, 0)
         self.P4_up = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P4_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-        self.P3_1 = StdConv(c3_size, feature_size, 1, 1, 0)
-        self.P3_2 = StdConv(feature_size, feature_size, 3, 1, 1)
-        self.P6 = StdConv(c5_size, feature_size, 3, 2, 1)
+        self.P4_2 = ConvBnAct(feature_size, feature_size, 3, 1, 1)
+        self.P3_1 = ConvBnAct(c3_size, feature_size, 1, 1, 0)
+        self.P3_2 = ConvBnAct(feature_size, feature_size, 3, 1, 1)
+        self.P6 = ConvBnAct(c5_size, feature_size, 3, 2, 1)
         self.P7_1 = nn.ReLU(inplace=True)
-        self.P7_2 = StdConv(feature_size, feature_size, 3, 2, 1)
+        self.P7_2 = ConvBnAct(feature_size, feature_size, 3, 2, 1)
 
     def forward(self, x):
         c3, c4, c5 = x
@@ -63,10 +63,10 @@ class FeaturePyramid(nn.Module):
 class RegressionSubNet(nn.Module):
     def __init__(self, in_channel: int, num_anchor=9, feature_size=256):
         super(RegressionSubNet, self).__init__()
-        self.conv1 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv2 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv3 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv4 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv1 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv2 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv3 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv4 = ConvBnAct(in_channel, feature_size, 3, 1)
         self.output = nn.Conv2d(feature_size, num_anchor*4, 3, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -86,10 +86,10 @@ class ClassificationSubNet(nn.Module):
         self.num_class = num_class
         self.num_anchor = num_anchor
 
-        self.conv1 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv2 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv3 = StdConv(in_channel, feature_size, 3, 1)
-        self.conv4 = StdConv(in_channel, feature_size, 3, 1)
+        self.conv1 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv2 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv3 = ConvBnAct(in_channel, feature_size, 3, 1)
+        self.conv4 = ConvBnAct(in_channel, feature_size, 3, 1)
         self.output = nn.Conv2d(feature_size, num_anchor*num_class, kernel_size=3, padding=1)
         self.output_act = nn.Sigmoid()
 

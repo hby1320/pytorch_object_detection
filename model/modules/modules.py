@@ -2,27 +2,36 @@ import torch.nn as nn
 import torch
 
 
-class StdConv(nn.Module):
-    def __init__(self, in_channel: int, out_channel: int, kernel: int, st: int, padding=1, act='relu', d=1):
-        super(StdConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels=in_channel,
-                              out_channels=out_channel,
-                              kernel_size=kernel,
-                              stride=st,
-                              padding=padding,
-                              dilation=d,
-                              bias=False)
-        self.bn = nn.BatchNorm2d(out_channel)
-        self.mode = act
+class ConvBnAct(nn.Module):
+    def __init__(self, in_channel: int, out_channel: int, kernel: int, st: int, act='relu', dilate=1,
+                 mode='DWconv'):
+        super(ConvBnAct, self).__init__()
 
-        if self.mode == 'swish':
+        if dilate > 1:
+            padding = dilate
+        else:
+            padding = kernel//2
+
+        if mode != 'DWconv':
+            self.Conv = nn.Conv2d(in_channels=in_channel,
+                                  out_channels=out_channel,
+                                  kernel_size=kernel,
+                                  stride=st,
+                                  padding=padding,
+                                  dilation=dilate,
+                                  bias=False)
+            self.Conv = DepthWiseConv2d(in_channel=in_channel, kernel=kernel, st=st, bs=False)
+        self.BatchNormal = nn.BatchNorm2d(out_channel)
+        self.act = act
+
+        if self.act == f'SiLU':
             self.act = nn.SiLU(True)
         else:
             self.act = nn.ReLU(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)
-        x = self.bn(x)
+        x = self.Conv(x)
+        x = self.BatchNormal(x)
         x = self.act(x)
         return x
 
@@ -33,7 +42,7 @@ class DepthWiseConv2d(nn.Conv2d):
                          out_channels=in_channel,
                          kernel_size=kernel,
                          stride=st,
-                         padding=kernel//2,
+                         padding=kernel // 2,
                          groups=in_channel,
                          bias=bs
                          )
@@ -51,12 +60,13 @@ class DilatedDepthWiseConv2d(nn.Conv2d):
                          bias=bs
                          )
 
+
 class PointWiseConv(nn.Conv2d):
     def __init__(self, in_channel: int, out_channel: int, kernel=1, st=1, bs=False):
         super().__init__(in_channels=in_channel,
                          out_channels=out_channel,
                          kernel_size=kernel,
-                         padding=kernel//2,
+                         padding=kernel // 2,
                          stride=st,
                          bias=bs
                          )
@@ -68,7 +78,7 @@ class DownConv(nn.Conv2d):
                          out_channels=out_channel,
                          kernel_size=kernel,
                          stride=st,
-                         padding=kernel//2,
+                         padding=kernel // 2,
                          bias=False
                          )
 
@@ -78,7 +88,7 @@ class SeparableConv2d(nn.Module):
         super(SeparableConv2d, self).__init__()
 
         self.depth_wise = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size, padding=kernel_size//2),
+            nn.Conv2d(in_channels, in_channels, kernel_size, padding=kernel_size // 2),
             nn.BatchNorm2d(in_channels),
             nn.ReLU(inplace=True),
         )
@@ -95,7 +105,8 @@ class SeparableConv2d(nn.Module):
 
 class SEBlock(nn.Module):
     """Squeeze-and-excitation block"""
-    def __init__(self, n_in, r=24):
+
+    def __init__(self, n_in, r=4):
         super().__init__()
         self.squeeze = nn.AdaptiveAvgPool2d(1)
         self.excitation = nn.Sequential(nn.Conv2d(n_in, n_in // r, kernel_size=1),
@@ -109,13 +120,13 @@ class SEBlock(nn.Module):
         return x * y
 
 
-class MCbottle(nn.Module):
+class MCBottle(nn.Module):
     def __init__(self, in_ch: int, out_ch: int, k: int = 3, beta: int = 4, alpha: int = 4):
-        super(MCbottle, self).__init__()
+        super(MCBottle, self).__init__()
         self.conv1_1 = PointWiseConv(in_channel=in_ch, out_channel=in_ch * beta)
         self.conv1_2 = DepthWiseConv2d(in_ch * beta, k, 1)
         self.conv1_3 = PointWiseConv(in_channel=in_ch * beta, out_channel=out_ch)
-        self.se_block = SEBlock(in_ch * beta, alpha=alpha)
+        self.se_block = SEBlock(in_ch * beta, alpha)
         self.bn = nn.BatchNorm2d(in_ch * beta)
         self.bn1 = nn.BatchNorm2d(in_ch * beta)
         self.bn2 = nn.BatchNorm2d(out_ch)
@@ -135,8 +146,8 @@ class MCbottle(nn.Module):
 class ICSPBlock(nn.Module):
     def __init__(self, in_ch: int, out_ch: int, k: int = 3, beta: int = 2, alpha: int = 4):
         super(ICSPBlock, self).__init__()
-        self.bottle_1 = MCbottle(in_ch, in_ch, k, beta, alpha)
-        self.bottle_2 = MCbottle(in_ch, in_ch, k, beta, alpha)
+        self.bottle_1 = MCBottle(in_ch, in_ch, k, beta, alpha)
+        self.bottle_2 = MCBottle(in_ch, in_ch, k, beta, alpha)
         self.pw_conv3 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
         self.pw_conv4 = PointWiseConv(in_channel=in_ch, out_channel=in_ch // 2)
         self.pw_conv5 = nn.Conv2d(in_ch, out_ch, 3, 1, 1, 1, bias=False)
@@ -184,17 +195,17 @@ class MNBlock(nn.Module):
     def __init__(self,
                  in_ch: int,
                  out_ch: int,
-                 kernal: int,
+                 kernel: int,
                  dilated: int):
         super(MNBlock, self).__init__()
-        self.DilatedDepthwiseConv = nn.Conv2d(in_ch, in_ch, kernal, 1, dilated, dilated, in_ch, False)
+        self.DilatedDepthWiseConv = nn.Conv2d(in_ch, in_ch, kernel, 1, dilated, dilated, in_ch, False)
         self.BN = nn.BatchNorm2d(in_ch)
-        self.PW1 = nn.Conv2d(in_ch,in_ch*4, 1, 1, 0, 1, 1, False)
+        self.PW1 = nn.Conv2d(in_ch, in_ch * 4, 1, 1, 0, 1, 1, False)
         self.ACT1 = nn.SiLU(True)
         self.PW2 = nn.Conv2d(in_ch * 4, out_ch, 1, 1, 0, 1, 1, True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x1 = self.DilatedDepthwiseConv(x)
+        x1 = self.DilatedDepthWiseConv(x)
         x1 = self.BN(x1)
         x1 = self.PW1(x1)
         x1 = self.ACT1(x1)
