@@ -53,9 +53,9 @@ HISFCOS:
     - [384, 9999999]
 
 MNFCOS:
-  CannelofBackbone: [ 2048, 1024, 512 ]
+  CannelofBackbone: [2048, 1024, 512]
   channel: 128
-  Epoch: 50
+  Epoch: 100
   batch_size: 16
   optimizer:
     name : SGD
@@ -65,7 +65,7 @@ MNFCOS:
   criterion : giou
   stride : [8, 16, 32, 64]
   range :
-    - [-1, 128]
+    - [-1, 64]
+    - [64, 128]
     - [128, 256]
-    - [256, 512]
-    - [512, 9999999]
+    - [256, 9999999]
