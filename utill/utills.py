@@ -6,6 +6,7 @@ from torchinfo import summary
 # from thop import profile
 from yaml import safe_load, FullLoader, load
 
+
 def model_info(model: nn.Module, batch: int, ch: int, width: int, hight: int, device: torch.device, depth=4):
     model.eval()
     col_names = ["input_size", "output_size", "num_params", "kernel_size", "mult_adds"]
@@ -264,4 +265,5 @@ def load_config(cfg: str = f'../config/main.yaml') -> dict:
     config['model']['name'] = main['model']
     config['model']['amp'] = main['amp']
     config['model']['ddp'] = main['ddp_enabled']
+    config['savename'] = main['savename']
     return config

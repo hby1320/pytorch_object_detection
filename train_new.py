@@ -26,8 +26,9 @@ if __name__ == '__main__':
     #                          tfs.Resize([512, 512])])
     cfg = load_config('./config/main.yaml')
     name = cfg['model']['name']
+    save = cfg['model']['name']
     day = datetime.date.today()
-    save_name = name + '_' + day.strftime(f"%m-%d")
+    save_name = name + '_' + save
     #  DDP setting
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -184,7 +185,7 @@ if __name__ == '__main__':
             pbar.set_description(s)
             GLOBAL_STEPS += 1
 
-        if epoch >= (cfg[name]['Epoch'] - 5):
+        if epoch >= (cfg[name]['Epoch'] - 3)  or epoch == 51:
             torch.save(model.state_dict(), f"./checkpoint/{save_name}_{epoch + 1}.pth")
 
     if writer is not None:

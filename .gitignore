@@ -9,7 +9,7 @@ runs/
 *.zip
 *.pth
 *.txt
-.idea
+**/.idea
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
