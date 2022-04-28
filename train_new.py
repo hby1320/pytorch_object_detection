@@ -26,10 +26,11 @@ if __name__ == '__main__':
     #                          tfs.Resize([512, 512])])
     cfg = load_config('./config/main.yaml')
     name = cfg['model']['name']
-    save = cfg['model']['name']
+    save = cfg['savename']
     day = datetime.date.today()
     save_name = name + '_' + save
     #  DDP setting
+
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
@@ -110,13 +111,11 @@ if __name__ == '__main__':
     # Loss function
     criterion = FCOSLoss(cfg[name]['criterion'])  # 'iou'
 
-
     start_epoch = 0
     prev_mAP = 0.0
     best_loss = 0
     WARMUP_STEPS = 501
     GLOBAL_STEPS = 1
-
 
     if local_rank == 0:
         writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', save_name))
@@ -185,7 +184,7 @@ if __name__ == '__main__':
             pbar.set_description(s)
             GLOBAL_STEPS += 1
 
-        if epoch >= (cfg[name]['Epoch'] - 3)  or epoch == 51:
+        if epoch >= (cfg[name]['Epoch'] - 3) or epoch == 24:
             torch.save(model.state_dict(), f"./checkpoint/{save_name}_{epoch + 1}.pth")
 
     if writer is not None:
