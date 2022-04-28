@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from utill.utills import model_info, ScaleExp
+from utill.utills import model_info
 from model.backbone.resnet50 import ResNet50v2
-from model.modules.modules import MNBlock, SEBlock, DeformableConv2d
+from model.modules.modules import MNBlock, SEBlock, DeformableConv2d, ScaleExp
 from typing import List
 # from torchvision.ops import DeformConv2d
 from model.backbone.efficientnetv1 import EfficientNetV1
@@ -61,31 +61,35 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.P6MNblock = MNBlock(feature, feature, 3, 2)
 
         self.Base_pw1 = nn.Conv2d(feature * 3, feature * 3, 1, 1, bias=True)
-        self.Base_dw1_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
-        self.Base_dw1_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        self.Base_dw1_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
+        self.Base_dw1_1 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
+        self.Base_dw1_2 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=True)
+        self.Base_dw1_3 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=False)
         self.sig1 = nn.Sigmoid()
         self.Base_bn1 = nn.BatchNorm2d(feature * 3)
         self.Base_act1 = nn.SiLU(True)
+        self.Base_dw1_4 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=False)
+        self.Base_bn2 = nn.BatchNorm2d(feature * 3)
+        self.Base_act2 = nn.SiLU(True)
         self.Base_pw2 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
 
-        self.Base_pw3 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
-        self.Base_dw2_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
-        self.Base_dw2_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        self.Base_dw2_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
-        self.sig2 = nn.Sigmoid()
-        self.Base_bn2 = nn.BatchNorm2d(feature * 3)
-        self.Base_act2 = nn.ReLU(True)
-        self.Base_pw4 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-        #
-        self.Base_pw5 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
-        self.Base_dw3_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
-        self.Base_dw3_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        self.Base_dw3_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
-        self.sig3 = nn.Sigmoid()
-        self.Base_bn3 = nn.BatchNorm2d(feature * 3)
-        self.Base_act3 = nn.ReLU(True)
-        self.Base_pw6 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
+
+        # self.Base_pw3 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
+        # self.Base_dw2_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
+        # self.Base_dw2_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
+        # self.Base_dw2_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
+        # self.sig2 = nn.Sigmoid()
+        # self.Base_bn2 = nn.BatchNorm2d(feature * 3)
+        # self.Base_act2 = nn.ReLU(True)
+        # self.Base_pw4 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
+        # #
+        # self.Base_pw5 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
+        # self.Base_dw3_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
+        # self.Base_dw3_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
+        # self.Base_dw3_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
+        # self.sig3 = nn.Sigmoid()
+        # self.Base_bn3 = nn.BatchNorm2d(feature * 3)
+        # self.Base_act3 = nn.ReLU(True)
+        # self.Base_pw6 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
 
         self.Base_down = nn.MaxPool2d(2, 2)
         self.Base_up = nn.Upsample(scale_factor=2)
@@ -96,7 +100,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.DW_2 = nn.Conv2d(feature, feature, 5, 2, 5 // 2, 1, feature, bias=True)
         self.DW_3 = nn.Conv2d(feature, feature, 5, 1, 5 // 2, 1, feature, bias=True)
         self.SE1 = SEBlock(feature * 3, 4)
-
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         c3, c4, c5 = x
@@ -117,6 +120,9 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base_3 = self.Base_bn1(base_3)
         base_3 = self.Base_act1(base_3)
         base_3 = torch.mul(self.sig1(base_3), base_feature)
+        base_3 = self.Base_dw1_4(base_3)
+        base_3 = self.Base_bn2(base_3)
+        base_3 = self.Base_act2(base_3)
         base = self.Base_pw2(base_3)
 
         # base_base = self.Base_pw3(base_l)
