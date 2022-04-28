@@ -11,6 +11,7 @@ from model.od.proposed import HalfInvertedStageFCOS
 from torchvision.ops import box_iou
 from model.od.MNFcos import MNFCOS
 
+
 def sort_by_score(pred_boxes, pred_labels, pred_scores):
     score_seq = [(-score).argsort() for index, score in enumerate(pred_scores)]
     pred_boxes = [sample_boxes[mask] for sample_boxes, mask in zip(pred_boxes, score_seq)]
@@ -262,13 +263,13 @@ if __name__ == '__main__':
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    voc_07_trainval = PascalVoc(root ="./data/voc/", year = "2007", image_set = "test", download = False, transforms=data_transform)
+    # voc_07_trainval = PascalVoc(root ="../../data/voc/", year = "2007", image_set = "test", download = False, transforms=data_transform)
 
-    # voc_07_trainval = VOCDataset('./data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
-    # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
-    #                              collate_fn=voc_07_trainval.collate_fn)
+    voc_07_trainval = VOCDataset('../../data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
     valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
-                              collate_fn=voc_collect)
+                                 collate_fn=voc_07_trainval.collate_fn)
+    # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
+    #                           collate_fn=voc_collect)
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
     # model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
@@ -283,7 +284,6 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/MNFCOS_03-14_50.pth'))
-
+        model.load_state_dict(torch.load('./checkpoint/MNFCOS_MNFCOS_52.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)
