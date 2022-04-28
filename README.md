@@ -2,7 +2,7 @@
 -------------------
 <h1>Conda install </h1>
 
-- pytorch 1.9.1
+- pytorch 1.10
 - pyyaml0
 - tqdm
 - matplotlib
