@@ -6,7 +6,7 @@ from torchvision.datasets import CocoDetection
 from torchvision import transforms
 import cv2
 import torch
-from model.od.proposed import HalfInvertedStageFCOS
+from model.od.HISFcos import HalfInvertedStageFCOS
 from model.od.Fcos import FCOS
 from model.modules.head import FCOSHead, ClipBoxes
 
