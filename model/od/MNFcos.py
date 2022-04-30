@@ -5,7 +5,6 @@ from utill.utills import model_info
 from model.backbone.resnet50 import ResNet50v2
 from model.modules.modules import MNBlock, SEBlock, DeformableConv2d, ScaleExp
 from typing import List
-# from torchvision.ops import DeformConv2d
 from model.backbone.efficientnetv1 import EfficientNetV1
 
 
@@ -13,7 +12,6 @@ class MNFCOS(nn.Module):
     def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
         super(MNFCOS, self).__init__()
         self.backbone = ResNet50v2()
-        # self.backbone = EfficientNetV1(0)
         self.FeaturePyramidNetwork = LieghtWeightFeaturePyramid(in_channel, feature)
         self.head = MNHeadFCOS(feature, num_class, 0.01)
         self.backbone_freeze = freeze_bn
@@ -71,7 +69,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.Base_bn2 = nn.BatchNorm2d(feature * 3)
         self.Base_act2 = nn.SiLU(True)
         self.Base_pw2 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-
 
         # self.Base_pw3 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
         # self.Base_dw2_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
@@ -149,18 +146,18 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base = self.DW_1_bn1(base)
         base = self.DW_1_act1(base)
 
-        base_l = self.DW_2(base)
-        # base_l = self.Base_down(base_l)  #16
-        #
-        base_m = self.DW_3(base)
-        base_m = self.Base_up(base_m)  # 64
+        base_s = self.DW_2(base)  # 16
+        base_s = torch.add(c5, base_s)
+        base_m = self.Base_up(base)  # 64
+        base_m = torch.add(c3, base_m)
+        base_m = self.DW_3(base_m)
 
         p3 = self.BaseFeatureUpSample(base)
         p3 = torch.add(p3, base_m)
         p3 = self.P3MNblock(p3)  # 64
         p4 = self.P4MNblock(base)  # 32A
         p5 = self.P4MNblockDownSample(p4)  # 16
-        p5 = torch.add(p5, base_l)
+        p5 = torch.add(p5, base_s)
         p5 = self.P5MNblock(p5)
         p6 = self.P5MNblockDownSample(p5)  # 8
         p6 = self.P6MNblock(p6)
@@ -231,10 +228,8 @@ class LieghtWeightFeaturePyramid(nn.Module):
 #         base_1 = self.Base_dw1(base_feature)
 #         base_1 = self.Base_bn1(base_1)
 #         base_1 = self.Base_act1(base_1)
-#
 #         base_s = torch.add(base_1, base_feature)
 #         # base_s = self.Se1(base_s)
-#
 #         base_m = self.Base_pw2(base_s)
 #         base_m = self.Base_dw2(base_m)
 #         base_m = self.Base_bn2(base_m)
@@ -242,7 +237,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
 #         base_m = self.Base_pw3(base_m)
 #         base_m = torch.add(base_m, base_s)
 #         # base_m = self.Se2(base_m)
-#
 #         base_l = self.Base_pw4(base_m)
 #         base_l = self.Base_dw3(base_l)
 #         base_l = self.Base_bn3(base_l)
@@ -250,18 +244,14 @@ class LieghtWeightFeaturePyramid(nn.Module):
 #         base_l = self.Base_pw5(base_l)
 #         base_l = torch.add(base_l, base_m)
 #         # base_l = self.Se3(base_l)
-#
 #         base_l = self.Dw_3(base_l)
 #         base_l = self.Base_bn4(base_l)
 #         base_l = self.Base_act4(base_l)
 #         # base_l = self.Base_pw7(base_l)
-#
 #         base_s = self.DW_1(base_s)
 #         base_s = self.Base_down(base_s)
-#
 #         base_m = self.DW_2(base_m)
 #         base_m = self.Base_up(base_m)
-#
 #         p3 = self.BaseFeatureUpSample(base_l)
 #         p3 = torch.add(p3, base_m)
 #         p3 = self.P3MNblock(p3)  # 64
@@ -285,9 +275,9 @@ class MNHeadFCOS(nn.Module):
         cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
         cls_branch.append(nn.GroupNorm(32, feature))
         cls_branch.append(nn.SiLU(True))
-        reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
-        reg_branch.append(nn.GroupNorm(32, feature))
-        reg_branch.append(nn.SiLU(True))
+        # reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
+        # reg_branch.append(nn.GroupNorm(32, feature))
+        # reg_branch.append(nn.SiLU(True))
         self.cls_conv = nn.Sequential(*cls_branch)
         self.reg_conv = nn.Sequential(*reg_branch)
         self.cls_logits = nn.Conv2d(feature, self.class_num, kernel_size=3, padding=1)
@@ -303,11 +293,10 @@ class MNHeadFCOS(nn.Module):
         for index, feature in enumerate(inputs):
             feature = self.block1(feature)
             cls_conv_out = self.cls_conv(feature)
-            reg_conv_out = self.reg_conv(feature)
+            # reg_conv_out = self.reg_conv(feature)
             cls_logits.append(self.cls_logits(cls_conv_out))
-            cnt_logits.append(self.cnt_logits(reg_conv_out))
-
-            reg_preds.append(self.scale_exp[index](self.reg_pred(reg_conv_out)))
+            cnt_logits.append(self.cnt_logits(cls_conv_out))
+            reg_preds.append(self.scale_exp[index](self.reg_pred(cls_conv_out)))
         return cls_logits, cnt_logits, reg_preds
 
 
