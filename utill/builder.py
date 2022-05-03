@@ -4,7 +4,7 @@ import torchvision
 import yaml
 from yaml import *
 from model.od.Fcos import FCOS
-from model.od.proposed import HalfInvertedStageFCOS
+from model.od.HISFcos import HalfInvertedStageFCOS
 
 
 def load_cfg(file: str = '../config.yaml') -> dict:

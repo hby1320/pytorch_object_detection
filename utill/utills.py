@@ -265,5 +265,7 @@ def load_config(cfg: str = f'../config/main.yaml') -> dict:
     config['model']['name'] = main['model']
     config['model']['amp'] = main['amp']
     config['model']['ddp'] = main['ddp_enabled']
+    config['model']['persistent'] = main['persistent_workers']
+    config['model']['prefetch'] = main['prefetch_factor']
     config['savename'] = main['savename']
     return config

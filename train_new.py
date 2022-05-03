@@ -7,17 +7,16 @@ from tqdm import tqdm
 import torch
 from model.modules.head import FCOSGenTargets
 from dataset.voc import VOCDataset
-from model.od.Fcos import FCOS
+import model.od as OD
 from model.loss import FCOSLoss
-from model.od.proposed import HalfInvertedStageFCOS
 from torch.optim import SGD, Adam
 from utill.utills import load_config, voc_collect
 import numpy as np
 import torchvision.transforms as tfs
-from model.od.MNFcos import MNFCOS
 from data.augment import Transforms
 # from dataset.pascalvoc import PascalVoc
 from dataset.pascalvoc import PascalVoc
+from test import evaluate
 Transform = Transforms()
 
 if __name__ == '__main__':
@@ -29,8 +28,8 @@ if __name__ == '__main__':
     save = cfg['savename']
     day = datetime.date.today()
     save_name = name + '_' + save
+    print(f"save_name:{save_name}")
     #  DDP setting
-
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
@@ -53,6 +52,8 @@ if __name__ == '__main__':
                               cfg['dataset_setting']['type'], False, True, Transform)
     voc_12_train = VOCDataset(cfg['dataset_setting']['train_12'], cfg['dataset_setting']['input'],
                               cfg['dataset_setting']['type'], False, True, Transform)
+    # voc_07_test = VOCDataset(cfg['dataset_setting']['train_07'], cfg['dataset_setting']['input'],'test',
+    #                        False, True)
     voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
     # voc_07_train = PascalVoc(cfg['dataset_setting']['train_07'], '2007', cfg['dataset_setting']['type'],
     #                          False, transforms=Transform)
@@ -61,6 +62,7 @@ if __name__ == '__main__':
     # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
 
     print(len(voc_07_train+voc_12_train))
+
     if cfg['model']['ddp']:
         sampler = torch.utils.data.DistributedSampler(voc_07_train+voc_12_train)
         shuffle = False
@@ -77,17 +79,23 @@ if __name__ == '__main__':
         train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=True,
                                       num_workers=cfg['dataset_setting']['num_workers'],
                                       collate_fn=voc_07_train.collate_fn, worker_init_fn=np.random.seed(0),
-                                      pin_memory=cfg['dataset_setting']['pin_memory'])
+                                      pin_memory=cfg['dataset_setting']['pin_memory'],
+                                      prefetch_factor=cfg['model']['prefetch'],
+                                      persistent_workers=cfg['model']['persistent'])
+        # test_dataloader = DataLoader(voc_07_test, batch_size=1, num_workers=cfg['dataset_setting']['num_workers'],
+        #                              collate_fn=voc_07_train.collate_fn, pin_memory=cfg['dataset_setting']['pin_memory'],
+        #                              persistent_workers=True)
     nb = len(train_dataloader)
     # Model build
     if name == 'FCOS':
-        model = FCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
-                           cfg[name]['channel'],).to(device)
+        model = OD.Fcos.FCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
+                             cfg[name]['channel'],).to(device)
     elif name == 'HISFCOS':
-        model = HalfInvertedStageFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
-                                      cfg[name]['channel'],).to(device)
+        model = OD.HISFcos.HalfInvertedStageFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
+                                                 cfg[name]['channel'],).to(device)
     elif name == 'MNFCOS':
-        model = MNFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'], cfg[name]['channel']).to(device)
+        model = OD.MNFcos.MNFCOS(cfg[name]['CannelofBackbone'], cfg['dataset_setting']['class_num'],
+                                 cfg[name]['channel']).to(device)
         # model = MNHeadFCOS([ 2048, 1024, 512 ], 20, 128).to(device)
     else:
         breakpoint()
@@ -96,8 +104,8 @@ if __name__ == '__main__':
     if cfg['model']['ddp']:
         model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    print(f'Activated model: {name} (rank{local_rank}) Save_weight : {save_name}')
     # Optimizer
+    print(f"Optimizer={cfg[name]['optimizer']['name']}")
     if cfg[name]['optimizer']['name'] == 'SGD':
         optimizer = SGD(model.parameters(), lr=cfg[name]['optimizer']['lr'],
                         momentum=cfg[name]['optimizer']['momentum'],
@@ -151,7 +159,7 @@ if __name__ == '__main__':
                 for param in optimizer.param_groups:
                     param['lr'] = lr
 
-            if GLOBAL_STEPS == 27001:  # 27001
+            if GLOBAL_STEPS == 22001:  # 27001
                 lr = cfg[name]['optimizer']['lr'] * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr
@@ -184,9 +192,10 @@ if __name__ == '__main__':
             pbar.set_description(s)
             GLOBAL_STEPS += 1
 
-        if epoch >= (cfg[name]['Epoch'] - 3) or epoch == 24:
+        if epoch >= (cfg[name]['Epoch'] - 3) or epoch == (cfg[name]['Epoch'] - 1)//2:
             torch.save(model.state_dict(), f"./checkpoint/{save_name}_{epoch + 1}.pth")
 
+    # evaluate(model, voc_07_test, False, False, device)
     if writer is not None:
         writer.close()
     if cfg['model']['ddp']:

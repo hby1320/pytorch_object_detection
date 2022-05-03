@@ -8,7 +8,7 @@ from model.modules.head import FCOSGenTargets
 from dataset.voc import VOCDataset
 from model.od.Fcos import FCOS
 from model.loss import FCOSLoss
-from model.od.proposed import HalfInvertedStageFCOS
+from model.od.HISFcos import HalfInvertedStageFCOS
 from torch.optim import SGD, Adam
 from torch.optim.swa_utils import AveragedModel, SWALR
 from utill.utills import model_info, load_config
@@ -167,7 +167,7 @@ if __name__ == '__main__':
                 for param in optimizer.param_groups:
                     param['lr'] = lr
 
-            if GLOBAL_STEPS == 27001:  # 27001
+            if GLOBAL_STEPS == 50001:  # 27001
                 lr = LR_INIT * 0.01
                 for param in optimizer.param_groups:
                     param['lr'] = lr

@@ -7,7 +7,7 @@ from tqdm import tqdm
 from model.modules.head import FCOSHead, ClipBoxes
 import numpy as np
 from model.od.Fcos import FCOS
-from model.od.proposed import HalfInvertedStageFCOS
+from model.od.HISFcos import HalfInvertedStageFCOS
 from torchvision.ops import box_iou
 from model.od.MNFcos import MNFCOS
 
@@ -230,7 +230,6 @@ def evaluate(model: nn.Module,
         "cow", "diningtable", "dog", "horse", "motorbike",
         "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
 
-
     print(f'all classes AP=====>\n')
     for key, value in all_ap.items():
         # print(f'ap for {vialder.id2name[int(key)]} is {value}')
@@ -247,15 +246,13 @@ if __name__ == '__main__':
     from utill.utills import voc_collect
     from dataset.pascalvoc import PascalVoc
     from dataset.voc import VOCDataset
-    from torchvision.transforms import transforms
+    # from torchvision.transforms import transforms
 
-    data_transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-
+    # data_transform = transforms.Compose([
+    #     transforms.Resize((512, 512)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    # ])
     batch_size = 1
     check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
     ddp_mode = False
@@ -263,12 +260,14 @@ if __name__ == '__main__':
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    # voc_07_trainval = PascalVoc(root ="../../data/voc/", year = "2007", image_set = "test", download = False, transforms=data_transform)
+    # voc_07_trainval = PascalVoc(root ="../../data/voc/", year = "2007", image_set = "test", download = False,
+    # transforms=data_transform)
 
     voc_07_trainval = VOCDataset('../../data/voc/VOCdevkit/VOC2007', [512, 512], "test", False, False)
-    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
+    valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=8,
                                  collate_fn=voc_07_trainval.collate_fn)
-    # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=4,
+
+    # valid_dataloder = DataLoader(voc_07_trainval, batch_size=batch_size, num_workers=8,
     #                           collate_fn=voc_collect)
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
@@ -284,6 +283,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/MNFCOS_MNFCOS_52.pth'))
+        model.load_state_dict(torch.load('./checkpoint/MNFCOS_Test15_50.pth'))
+        # model.load_state_dict(torch.load('./checkpoint/MNFCOS_featruepyamid_test1_49.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)
