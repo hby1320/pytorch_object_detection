@@ -7,7 +7,6 @@ from typing import List
 import numpy as np
 
 
-
 """
 Total params: 32,662,846
 Trainable params: 32,378,366
