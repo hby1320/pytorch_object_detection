@@ -47,16 +47,13 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.BaseFeatureUpSample = nn.Upsample(scale_factor=2)
         self.BaseFeatureDownSample = nn.MaxPool2d(2, 2)
         self.Base = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-        self.BaseMNblock = MNBlock(feature, feature, 3, 3)
-        self.BaseMNblock2 = MNBlock(feature, feature, 3, 3)
 
-        self.C3MNblock = MNBlock(feature, feature, 3, 2)
-        self.P3MNblock = MNBlock(feature, feature, 3, 2)
-        self.P4MNblock = MNBlock(feature, feature, 3, 2)
+        self.P3MNblock = MNBlock(feature, feature, 3, 3, 1)
+        self.P4MNblock = MNBlock(feature, feature, 3, 3, 1)
         self.P4MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P5MNblock = MNBlock(feature, feature, 3, 2)
+        self.P5MNblock = MNBlock(feature, feature, 3, 3, 1)
         self.P5MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P6MNblock = MNBlock(feature, feature, 3, 2)
+        self.P6MNblock = MNBlock(feature, feature, 3, 2, 1)
 
         self.Base_pw1 = nn.Conv2d(feature * 3, feature * 3, 1, 1, bias=True)
         self.Base_dw1_1 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
@@ -70,32 +67,19 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.Base_act2 = nn.SiLU(True)
         self.Base_pw2 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
 
-        # self.Base_pw3 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
-        # self.Base_dw2_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
-        # self.Base_dw2_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        # self.Base_dw2_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
-        # self.sig2 = nn.Sigmoid()
-        # self.Base_bn2 = nn.BatchNorm2d(feature * 3)
-        # self.Base_act2 = nn.ReLU(True)
-        # self.Base_pw4 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-        # #
-        # self.Base_pw5 = nn.Conv2d(feature, feature * 3, 1, 1, bias=True)
-        # self.Base_dw3_1 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=True)
-        # self.Base_dw3_2 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        # self.Base_dw3_3 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=False)
-        # self.sig3 = nn.Sigmoid()
-        # self.Base_bn3 = nn.BatchNorm2d(feature * 3)
-        # self.Base_act3 = nn.ReLU(True)
-        # self.Base_pw6 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-
         self.Base_down = nn.MaxPool2d(2, 2)
         self.Base_up = nn.Upsample(scale_factor=2)
         self.DW_1 = nn.Conv2d(feature, feature, 5, 1, 5//2, 1, feature, bias=True)
         self.DW_1_bn1 = nn.BatchNorm2d(feature)
         self.DW_1_act1 = nn.ReLU(True)
 
-        self.DW_2 = nn.Conv2d(feature, feature, 5, 2, 5 // 2, 1, feature, bias=True)
-        self.DW_3 = nn.Conv2d(feature, feature, 5, 1, 5 // 2, 1, feature, bias=True)
+        self.DW_2 = nn.Conv2d(feature, feature, 3, 1, 3 // 2, 1, feature, bias=True)
+        self.DW_2_BN = nn.BatchNorm2d(feature)
+        self.DW_2_ACT = nn.SiLU(True)
+
+        self.DW_3 = nn.Conv2d(feature, feature, 3, 1, 3 // 2, 1, feature, bias=True)
+        self.DW_3_BN = nn.BatchNorm2d(feature)
+        self.DW_3_ACT = nn.SiLU(True)
         self.SE1 = SEBlock(feature * 3, 4)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -146,17 +130,26 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base = self.DW_1_bn1(base)
         base = self.DW_1_act1(base)
 
-        base_s = self.DW_2(base)  # 16
-        base_s = torch.add(c5, base_s)
-        base_m = self.Base_up(base)  # 64
-        base_m = torch.add(c3, base_m)
-        base_m = self.DW_3(base_m)
+        base_s = self.Base_down(base)  # 64
+        base_s = self.DW_2(base_s)  # 16
+        base_s = self.DW_2_BN(base_s)  # 16
+        base_s = self.DW_2_ACT(base_s)  # 16
 
+        # base_s = torch.add(c5, base_s)
+
+
+        base_m = self.Base_up(base)  # 64
+        # base_m = torch.add(c3, base_m)
+        base_m = self.DW_3(base_m)
+        base_m = self.DW_3_BN(base_m)
+        base_m = self.DW_3_ACT(base_m)
+
+        p4 = self.P4MNblock(base)  # 32A
         p3 = self.BaseFeatureUpSample(base)
+        p5 = self.P4MNblockDownSample(p4)  # 16
         p3 = torch.add(p3, base_m)
         p3 = self.P3MNblock(p3)  # 64
-        p4 = self.P4MNblock(base)  # 32A
-        p5 = self.P4MNblockDownSample(p4)  # 16
+
         p5 = torch.add(p5, base_s)
         p5 = self.P5MNblock(p5)
         p6 = self.P5MNblockDownSample(p5)  # 8
@@ -275,9 +268,9 @@ class MNHeadFCOS(nn.Module):
         cls_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
         cls_branch.append(nn.GroupNorm(32, feature))
         cls_branch.append(nn.SiLU(True))
-        # reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
-        # reg_branch.append(nn.GroupNorm(32, feature))
-        # reg_branch.append(nn.SiLU(True))
+        reg_branch.append(nn.Conv2d(feature, feature, kernel_size=3, padding=1, bias=False))
+        reg_branch.append(nn.GroupNorm(32, feature))
+        reg_branch.append(nn.SiLU(True))
         self.cls_conv = nn.Sequential(*cls_branch)
         self.reg_conv = nn.Sequential(*reg_branch)
         self.cls_logits = nn.Conv2d(feature, self.class_num, kernel_size=3, padding=1)
@@ -293,10 +286,10 @@ class MNHeadFCOS(nn.Module):
         for index, feature in enumerate(inputs):
             feature = self.block1(feature)
             cls_conv_out = self.cls_conv(feature)
-            # reg_conv_out = self.reg_conv(feature)
+            reg_conv_out = self.reg_conv(feature)
             cls_logits.append(self.cls_logits(cls_conv_out))
-            cnt_logits.append(self.cnt_logits(cls_conv_out))
-            reg_preds.append(self.scale_exp[index](self.reg_pred(cls_conv_out)))
+            cnt_logits.append(self.cnt_logits(reg_conv_out))
+            reg_preds.append(self.scale_exp[index](self.reg_pred(reg_conv_out)))
         return cls_logits, cnt_logits, reg_preds
 
 
