@@ -48,17 +48,17 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.BaseFeatureDownSample = nn.MaxPool2d(2, 2)
         self.Base = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
 
-        self.P3MNblock = MNBlock(feature, feature, 3, 3, 1)
-        self.P4MNblock = MNBlock(feature, feature, 3, 3, 1)
+        self.P3MNblock = MNBlock(feature, feature, 3, 3, 3)
+        self.P4MNblock = MNBlock(feature, feature, 3, 3, 3)
         self.P4MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P5MNblock = MNBlock(feature, feature, 3, 3, 1)
+        self.P5MNblock = MNBlock(feature, feature, 3, 3, 3)
         self.P5MNblockDownSample = nn.MaxPool2d(2, 2)
-        self.P6MNblock = MNBlock(feature, feature, 3, 2, 1)
+        self.P6MNblock = MNBlock(feature, feature, 3, 2, 3)
 
         self.Base_pw1 = nn.Conv2d(feature * 3, feature * 3, 1, 1, bias=True)
-        self.Base_dw1_1 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=True)
-        self.Base_dw1_2 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=True)
-        self.Base_dw1_3 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=False)
+        self.Base_dw1_1 = nn.Conv2d(feature * 3, feature * 3, 7, 1, 7 // 2, 1, feature * 3, bias=True)
+        self.Base_dw1_2 = nn.Conv2d(feature * 3, feature * 3, 13, 1, 13 // 2, 1, feature * 3, bias=True)
+        self.Base_dw1_3 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=False)
         self.sig1 = nn.Sigmoid()
         self.Base_bn1 = nn.BatchNorm2d(feature * 3)
         self.Base_act1 = nn.SiLU(True)
@@ -66,14 +66,14 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.Base_bn2 = nn.BatchNorm2d(feature * 3)
         self.Base_act2 = nn.SiLU(True)
         self.Base_pw2 = nn.Conv2d(feature * 3, feature, 1, 1, bias=True)
-
+        #  05.04 실험 dw1_4 제거 (act2까지)
         self.Base_down = nn.MaxPool2d(2, 2)
         self.Base_up = nn.Upsample(scale_factor=2)
         self.DW_1 = nn.Conv2d(feature, feature, 5, 1, 5//2, 1, feature, bias=True)
         self.DW_1_bn1 = nn.BatchNorm2d(feature)
-        self.DW_1_act1 = nn.ReLU(True)
+        self.DW_1_act1 = nn.SiLU(True)
 
-        self.DW_2 = nn.Conv2d(feature, feature, 3, 1, 3 // 2, 1, feature, bias=True)
+        self.DW_2 = nn.Conv2d(feature, feature, 5, 1, 5 // 2, 1, feature, bias=True)
         self.DW_2_BN = nn.BatchNorm2d(feature)
         self.DW_2_ACT = nn.SiLU(True)
 
@@ -101,9 +101,9 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base_3 = self.Base_bn1(base_3)
         base_3 = self.Base_act1(base_3)
         base_3 = torch.mul(self.sig1(base_3), base_feature)
-        base_3 = self.Base_dw1_4(base_3)
-        base_3 = self.Base_bn2(base_3)
-        base_3 = self.Base_act2(base_3)
+        # base_3 = self.Base_dw1_4(base_3)
+        # base_3 = self.Base_bn2(base_3)
+        # base_3 = self.Base_act2(base_3)
         base = self.Base_pw2(base_3)
 
         # base_base = self.Base_pw3(base_l)
@@ -134,9 +134,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base_s = self.DW_2(base_s)  # 16
         base_s = self.DW_2_BN(base_s)  # 16
         base_s = self.DW_2_ACT(base_s)  # 16
-
-        # base_s = torch.add(c5, base_s)
-
 
         base_m = self.Base_up(base)  # 64
         # base_m = torch.add(c3, base_m)
@@ -296,6 +293,5 @@ class MNHeadFCOS(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = MNFCOS(in_channel=[2048, 1024, 512], num_class = 20, feature=128).to(device)
-    # model = MNFCOS(in_channel=[320, 112, 40], num_class = 20, feature=128).to(device) #
     tns = torch.rand(1, 3, 512, 512).to(device)
     model_info(model, 1, 3, 512, 512, device, 4)  # flop51.26G  para0.03G
