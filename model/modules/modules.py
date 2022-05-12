@@ -197,13 +197,14 @@ class MNBlock(nn.Module):
                  in_ch: int,
                  out_ch: int,
                  kernel: int,
-                 dilated: int):
+                 dilated: int,
+                 alpha: int = 1):
         super(MNBlock, self).__init__()
         self.DilatedDepthWiseConv = nn.Conv2d(in_ch, in_ch, kernel, 1, dilated, dilated, in_ch, False)
         self.BN = nn.BatchNorm2d(in_ch)
-        self.PW1 = nn.Conv2d(in_ch, in_ch * 4, 1, 1, 0, 1, 1, False)
+        self.PW1 = nn.Conv2d(in_ch, in_ch * alpha, 1, 1, 0, 1, 1, True)
         self.ACT1 = nn.SiLU(True)
-        self.PW2 = nn.Conv2d(in_ch * 4, out_ch, 1, 1, 0, 1, 1, True)
+        self.PW2 = nn.Conv2d(in_ch * alpha, out_ch, 1, 1, 0, 1, 1, True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = self.DilatedDepthWiseConv(x)
@@ -213,6 +214,7 @@ class MNBlock(nn.Module):
         x1 = self.PW2(x1)
         x1 = torch.add(x, x1)
         return x1
+
 
 class DeformableConv2d(nn.Module):
     def __init__(self,

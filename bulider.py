@@ -12,9 +12,6 @@ class Builder:
         self.config = cfg
         self.model = cfg['model']['name']  # model_name
 
-    # def dataset_build(self):
-        
-
     def model_build(self,) -> nn.Module:
         cfg_model = self.config[self.model]
         Cob = cfg_model['CannelofBackbone']
@@ -45,16 +42,9 @@ class Builder:
 
         return optimizer
 
-    # def dataset_build(self):
-    #
-    # def loss_build(self):
-
 
 if __name__ == '__main__':
     cfg = load_config('./config/main.yaml')
     build = Builder(cfg)
     model = build.model_build()
     opt = build.opt_build(model)
-    print(opt)
-    print(type(model))
-    print(model)

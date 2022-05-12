@@ -13,11 +13,22 @@ def flip(img, boxes):
     img = img.transpose(Image.FLIP_LEFT_RIGHT)
     w = img.width
     if boxes.shape[0] != 0:
-        xmin = w - boxes[:,2]
-        xmax = w - boxes[:,0]
+        xmin = w - boxes[:, 2]
+        xmax = w - boxes[:, 0]
         boxes[:, 2] = xmax
         boxes[:, 0] = xmin
     return img, boxes
+
+
+# def flip_pytorch(img, boxes):
+#     img = img.transpose(Image.FLIP_LEFT_RIGHT)
+#     w = img.width
+#     if boxes.shape[0] != 0:
+#         xmin = w - boxes[:, 2]
+#         xmax = w - boxes[:, 0]
+#         boxes[:, 2] = xmax
+#         boxes[:, 0] = xmin
+#     return img, boxes
 
 
 class VOCDataset(torch.utils.data.Dataset):
@@ -82,6 +93,7 @@ class VOCDataset(torch.utils.data.Dataset):
             classes.append(self.name2id[name])
 
         boxes = np.array(boxes, dtype=np.float32)
+        # boxes = torch.tensor(boxes)
         if self.train:
             if random.random() < 0.5:
                 img, boxes = flip(img, boxes)
@@ -89,7 +101,6 @@ class VOCDataset(torch.utils.data.Dataset):
                 img, boxes = self.augment(img, boxes)
         img = np.array(img)
         img, boxes = self.preprocess_img_boxes(img, boxes, self.resize_size)
-
         img = transforms.ToTensor()(img)
         boxes = torch.from_numpy(boxes)
         classes = torch.LongTensor(classes)
