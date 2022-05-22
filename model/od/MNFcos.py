@@ -12,6 +12,7 @@ class MNFCOS(nn.Module):
     def __init__(self, in_channel: List[int], num_class: int, feature: int, freeze_bn: bool = True):
         super(MNFCOS, self).__init__()
         self.backbone = ResNet50v2()
+        # self.backbone = EfficientNetV1()
         self.FeaturePyramidNetwork = LieghtWeightFeaturePyramid(in_channel, feature)
         # self.FeaturePyramidNetwork = LieghtWeightFeaturePyramid_old(in_channel, feature)
         self.head = MNHeadFCOS(feature, num_class, 0.01)
@@ -38,10 +39,10 @@ class MNFCOS(nn.Module):
 class LieghtWeightFeaturePyramid(nn.Module):
     def __init__(self, in_channel: List[int], feature=128):
         super(LieghtWeightFeaturePyramid, self).__init__()
-        self.C5PW = nn.Conv2d(in_channels=in_channel[0], out_channels= feature, kernel_size=1)
-        self.C4PW = nn.Conv2d(in_channels=in_channel[1], out_channels = feature, kernel_size = 1)
-        self.C3PW = nn.Conv2d(in_channels = in_channel[2], out_channels = feature, kernel_size = 1)
-        self.C3_Deform1 = DeformableConv2d(in_channel[1], in_channel[1], kernel_size=3, padding=1, bias=True)
+        self.C5PW = nn.Conv2d(in_channels=in_channel[0], out_channels=feature, kernel_size=1)
+        self.C4PW = nn.Conv2d(in_channels=in_channel[1], out_channels=feature, kernel_size=1)
+        self.C3PW = nn.Conv2d(in_channels=in_channel[2], out_channels=feature, kernel_size=1)
+        self.C3_Deform1 = DeformableConv2d(feature, feature, kernel_size=3, padding=1, bias=True)
         self.C3DownSample = nn.MaxPool2d(kernel_size=2, stride=2)
         self.C5UpSample = nn.Upsample(scale_factor=2)
         # backbone channel tune
@@ -55,6 +56,8 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.P5MNblock = MNBlock(feature, feature, 3, 2, 2)
         self.P5MNblockDownSample = nn.MaxPool2d(2, stride=2)
         self.P6MNblock = MNBlock(feature, feature, 3, 2, 2)
+        self.P6MNblockDownSample = nn.MaxPool2d(2, stride=2)
+        self.P7MNblock = MNBlock(feature, feature, 3, 2, 2)
 
         self.Base_pw1 = nn.Conv2d(feature * 3, feature * 2, 1, 1, bias=True)
         self.Base_dw1_1 = nn.Conv2d(feature * 2, feature * 2, 5, 1, 5 // 2, 1, feature * 2, bias=True)
@@ -62,12 +65,11 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.Base_dw1_3 = nn.Conv2d(feature * 2, feature * 2, 3, 1, 3 // 2, 1, feature * 2, bias=False)
         self.sig1 = nn.Sigmoid()
         self.Base_bn1 = nn.BatchNorm2d(feature * 2)
-        self.Base_act1 = nn.SiLU(True)
-        self.Base_dw1_4 = nn.Conv2d(feature * 3, feature * 3, 3, 1, 3 // 2, 1, feature * 3, bias=False)
+        self.Base_act1 = nn.ReLU(True)
+        self.Base_dw1_4 = nn.Conv2d(feature * 3, feature * 3, 5, 1, 5 // 2, 1, feature * 3, bias=False)
         self.Base_bn2 = nn.BatchNorm2d(feature * 3)
-        self.Base_act2 = nn.SiLU(True)
+        self.Base_act2 = nn.ReLU(True)
         self.Base_pw2 = nn.Conv2d(feature * 2, feature, 1, 1, bias=True)
-        # self.Base_pw3 = nn.Conv2d(feature, feature, 1, 1, bias=True)
 
         self.Base_down = nn.MaxPool2d(2, 2)
         self.Base_up = nn.Upsample(scale_factor=2)
@@ -82,12 +84,13 @@ class LieghtWeightFeaturePyramid(nn.Module):
         self.DW_3 = nn.Conv2d(feature, feature, 3, 1, 3 // 2, 1, feature, bias=False)
         self.DW_3_BN = nn.BatchNorm2d(feature)
         self.DW_3_ACT = nn.SiLU(True)
-        self.SE1 = SEBlock(feature * 3, 4)
+        self.SE1 = SEBlock(feature * 3, 2)
 
         self.P3_2MNblock = MNBlock(feature, feature, 3, 2, 1)
         self.P4_2MNblock = MNBlock(feature, feature, 3, 2, 1)
         self.P5_2MNblock = MNBlock(feature, feature, 3, 2, 1)
         self.P6_2MNblock = MNBlock(feature, feature, 3, 2, 1)
+        self.P7_2MNblock = MNBlock(feature, feature, 3, 2, 1)
         # self.P5_2MNblock = MNBlock(feature, feature, 3, 2, 2)
         # self.P6_2MNblockUpwnSample = nn.Upsample(scale_factor=2)
         # self.P4_2MNblock = MNBlock(feature, feature, 3, 2, 2)
@@ -99,11 +102,10 @@ class LieghtWeightFeaturePyramid(nn.Module):
         c3, c4, c5 = x
         c3 = self.C3PW(c3)  # 256 64 64
         c3_2 = self.C3DownSample(c3)  # c3 -> 256 32 32
-        c4 = self.C3_Deform1(c4)
         c4 = self.C4PW(c4)  # 256 32 32
+        c4 = self.C3_Deform1(c4)
         c5 = self.C5PW(c5)  # 256 16 16
         c5_2 = self.C5UpSample(c5)  # C5 -> 256 32 32
-
 
         base_feature = torch.concat([c5_2, c4, c3_2], dim=1)  # 384 32 32
         base_feature = self.SE1(base_feature)
@@ -118,26 +120,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
         base_3 = torch.mul(self.sig1(base_3), base_feature)
         base = self.Base_pw2(base_3)
 
-        # base_base = self.Base_pw3(base_l)
-        # base_1 = self.Base_dw2_1(base_base)
-        # base_2 = self.Base_dw2_2(base_base)
-        # base_3 = torch.add(base_1, base_2)
-        # base_3 = self.Base_dw2_3(base_3)
-        # base_3 = self.Base_bn2(base_3)
-        # base_3 = self.Base_act2(base_3)
-        # base_3 = torch.mul(self.sig2(base_3), base_base)
-        # base_m = self.Base_pw4(base_3)
-        #
-        # base_base2 = self.Base_pw5(base_m)
-        # base_1 = self.Base_dw3_1(base_base2)
-        # base_2 = self.Base_dw3_2(base_base2)
-        # base_3 = torch.add(base_1, base_2)
-        # base_3 = self.Base_dw3_3(base_3)
-        # base_3 = self.Base_bn3(base_3)
-        # base_3 = self.Base_act3(base_3)
-        # base_3 = torch.mul(self.sig3(base_3), base_base2)
-        # base_s = self.Base_pw6(base_3)
-
         base = self.DW_1(base)
         base = self.DW_1_bn1(base)
         base = self.DW_1_act1(base)
@@ -150,7 +132,7 @@ class LieghtWeightFeaturePyramid(nn.Module):
 
         base_m = self.Base_up(base)  # 64
 
-        # base_m = torch.add(c3, base_m)
+        base_m = torch.add(c3, base_m)
         base_m = self.DW_3(base_m)
         base_m = self.DW_3_BN(base_m)
         base_m = self.DW_3_ACT(base_m)
@@ -167,10 +149,12 @@ class LieghtWeightFeaturePyramid(nn.Module):
         p5 = self.P5_2MNblock(p5)  #
 
         p6 = self.P5MNblockDownSample(p5)  # 8
-
         p6 = self.P6MNblock(p6)
         p6 = self.P6_2MNblock(p6)  #
-        #  --
+
+        p7 = self.P6MNblockDownSample(p6)  # 8
+        p7 = self.P7MNblock(p7)
+        p7 = self.P7_2MNblock(p7)  #
         # p6_2 = self.P6_2MNblockUpwnSample(p6)
         # p5 = torch.add(p6_2, p5)
         # p5 = self.P5_2MNblock(p5)
@@ -181,7 +165,7 @@ class LieghtWeightFeaturePyramid(nn.Module):
         # p3 = torch.add(p3, p4_2)
         # p3 = self.P3_2MNblock(p3)
 
-        return p3, p4, p5, p6
+        return p3, p4, p5, p6, p7
 
 
 # class LieghtWeightFeaturePyramid_old(nn.Module):
@@ -232,7 +216,6 @@ class LieghtWeightFeaturePyramid(nn.Module):
 #         p6 = self.P5MNblockDownSample(p5)  # 8
 #         p6 = torch.add(p6, c5_top)
 #         p6 = self.P6MNblock(p6)
-#
 #         return p3, p4, p5, p6
 
 class MNHeadFCOS(nn.Module):
@@ -258,7 +241,7 @@ class MNHeadFCOS(nn.Module):
         self.cnt_logits = nn.Conv2d(feature, 1, kernel_size=1)
         self.reg_pred = nn.Conv2d(feature, 4, kernel_size=1)
         nn.init.constant_(self.cls_logits.bias, -np.log((1 - self.prior) / self.prior))
-        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(4)])
+        self.scale_exp = nn.ModuleList([ScaleExp(1.0) for _ in range(5)])
 
     def forward(self, inputs: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
         cls_logits = []
@@ -276,6 +259,7 @@ class MNHeadFCOS(nn.Module):
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = MNFCOS(in_channel=[2048, 1024, 512], num_class = 20, feature=128).to(device)
+    model = MNFCOS(in_channel=[2048, 1024, 512], num_class=20, feature=128).to(device)
+    # model = MNFCOS(in_channel=[2048, 1024, 512], num_class = 20, feature=128).to(device)
     tns = torch.rand(1, 3, 512, 512).to(device)
     model_info(model, 1, 3, 512, 512, device, 4)  # flop51.26G  para0.03G
