@@ -2,26 +2,24 @@
 #dataset location # 2070 (num 4 batch 16) # 3090 (num 8 batch 32)
 dataset_setting:
   class_num : 20
-  train_07 : './data/voc/VOCdevkit/VOC2007'
-  train_12 : './data/voc/VOCdevkit/VOC2012'
-#  train_07: './data/voc/'
-#  train_12: './data/voc/'
+  train_07 : '../../data/voc/VOCdevkit/VOC2007'
+  train_12 : '../../data/voc/VOCdevkit/VOC2012'
   input : [512,512]
   type : 'trainval'
   pin_memory : True
-  num_workers : 4
+  num_workers : 8
   class: ["aeroplane", "bicycle", "bird", "boat","bottle", "bus", "car", "cat", "chair", "cow",
            "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor" ]
 
-# model info
+# Model INFO
 FCOS :
   CannelofBackbone : [2048, 1024, 512]
   channel : 256
   Epoch : 50
-  batch_size : 16
+  batch_size : 32
   optimizer:
     name : SGD
-    lr : 1e-2  # 0.0001
+    lr : 1.0e-2   # 0.0001
     momentum : 0.9
     weight_decay : 0.0001
   criterion : giou
@@ -55,8 +53,8 @@ HISFCOS:
 MNFCOS:
   CannelofBackbone: [2048, 1024, 512]
   channel: 128
-  Epoch: 100
-  batch_size: 16
+  Epoch: 50
+  batch_size: 32
   optimizer:
     name : SGD
     lr : 1.0e-2  # 0.0001
