@@ -8,7 +8,7 @@ import dataset
 
 
 class Builder:
-    def __init__(self, cfg,):
+    def __init__(self, cfg):
         self.config = cfg
         self.model = cfg['model']['name']  # model_name
 
@@ -46,5 +46,6 @@ class Builder:
 if __name__ == '__main__':
     cfg = load_config('./config/main.yaml')
     build = Builder(cfg)
-    model = build.model_build()
-    opt = build.opt_build(model)
+
+    # model = build.model_build()
+    # opt = build.opt_build(model)

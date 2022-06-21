@@ -7,11 +7,13 @@ from tqdm import tqdm
 import torch
 from model.modules.head import FCOSGenTargets
 from dataset.voc import VOCDataset
+from dataset.coco import COCODataset
 import model.od as OD
 from model.loss import FCOSLoss
 from torch.optim import SGD, Adam
 from utill.utills import load_config, voc_collect
 import numpy as np
+
 import torchvision.transforms as tfs
 from data.augment import Transforms
 # from dataset.pascalvoc import PascalVoc
@@ -29,6 +31,7 @@ if __name__ == '__main__':
     day = datetime.date.today()
     save_name = name + '_' + save
     print(f"save_name:{save_name}")
+
     #  DDP setting
     if cfg['model']['ddp']:
         assert torch.distributed.is_nccl_available(), 'NCCL backend is not available.'
@@ -48,40 +51,82 @@ if __name__ == '__main__':
         device = torch.device('cpu')
 
     # 2. Data loader
-    voc_07_train = VOCDataset(cfg['dataset_setting']['train_07'], cfg['dataset_setting']['input'],
-                              cfg['dataset_setting']['type'], False, True, Transform)
-    voc_12_train = VOCDataset(cfg['dataset_setting']['train_12'], cfg['dataset_setting']['input'],
-                              cfg['dataset_setting']['type'], False, True, Transform)
-    # voc_07_test = VOCDataset(cfg['dataset_setting']['train_07'], cfg['dataset_setting']['input'],'test',
-    #                        False, True)
-    voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+    if cfg['model']['dataset'] == f'VOC':
+        voc_07_train = VOCDataset(cfg['dataset_setting']['train_07'], cfg['dataset_setting']['input'],
+                                  cfg['dataset_setting']['type'], False, True, Transform)
+        voc_12_train = VOCDataset(cfg['dataset_setting']['train_12'], cfg['dataset_setting']['input'],
+                                  cfg['dataset_setting']['type'], False, True, Transform)
+        TrainDataset = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+        TrainDatasetCollateFn = voc_07_train.collate_fn
+
+    elif cfg['model']['dataset'] == f'COCO':
+        TrainDataset = COCODataset(cfg['dataset_setting']['TrainData'], cfg['dataset_setting']['TrainAnnotation'],
+                                   cfg['dataset_setting']['input'], True, Transform)
+        TrainDatasetCollateFn = TrainDataset.collate_fn
+    print(len(TrainDataset))
+
+
     # voc_07_train = PascalVoc(cfg['dataset_setting']['train_07'], '2007', cfg['dataset_setting']['type'],
     #                          False, transforms=Transform)
     # voc_12_train = PascalVoc(cfg['dataset_setting']['train_12'], '2012', cfg['dataset_setting']['type'],
     #                          False, transforms=Transform)
     # voc_train = ConcatDataset([voc_07_train, voc_12_train])  # 07 + 12 Dataset
+    lr_schedule = [120000, 160000]
+    WARMUP_STEPS = 500
+    WARMUP_FACTOR = 1.0 / 3.0
+    GLOBAL_STEPS = 0
+    LR_INIT = 0.01
+    def lr_func(step):
+        lr = LR_INIT
+        if step < WARMUP_STEPS:
+            alpha = float(step) / WARMUP_STEPS
+            warmup_factor = WARMUP_FACTOR * (1.0 - alpha) + alpha
+            lr = lr * warmup_factor
+        else:
+            for i in range(len(lr_schedule)):
+                if step < lr_schedule[i]:
+                    break
+                lr *= 0.1
+        return float(lr)
 
-    print(len(voc_07_train+voc_12_train))
 
     if cfg['model']['ddp']:
-        sampler = torch.utils.data.DistributedSampler(voc_07_train+voc_12_train)
+        sampler = torch.utils.data.DistributedSampler(TrainDataset)
         shuffle = False
         pin_memory = False
-        train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=shuffle,
+        train_dataloader = DataLoader(TrainDataset, batch_size=cfg[name]['batch_size'], shuffle=shuffle,
                                       sampler=sampler, num_workers=cfg['dataset_setting']['num_workers'],
-                                      pin_memory=pin_memory, collate_fn=voc_07_train.collate_fn)
+                                      pin_memory=pin_memory, collate_fn=TrainDatasetCollateFn,
+                                      worker_init_fn=np.random.seed(0),
+                                      prefetch_factor=cfg['model']['prefetch'],
+                                      persistent_workers=cfg['model']['persistent']
+                                      )
     else:
         sampler = False
         # train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=True,
         #                               num_workers=cfg['dataset_setting']['num_workers'],
         #                               collate_fn=voc_collect, worker_init_fn=np.random.seed(0),
         #                               pin_memory=cfg['dataset_setting']['pin_memory'])
-        train_dataloader = DataLoader(voc_train, batch_size=cfg[name]['batch_size'], shuffle=True,
+        train_dataloader = DataLoader(TrainDataset, batch_size=cfg[name]['batch_size'], shuffle=True,
                                       num_workers=cfg['dataset_setting']['num_workers'],
-                                      collate_fn=voc_07_train.collate_fn, worker_init_fn=np.random.seed(0),
+                                      collate_fn=TrainDatasetCollateFn, worker_init_fn=np.random.seed(0),
                                       pin_memory=cfg['dataset_setting']['pin_memory'],
                                       prefetch_factor=cfg['model']['prefetch'],
                                       persistent_workers=cfg['model']['persistent'])
+        # if cfg['model']['dataset'] == f'VOC':
+        #     train_dataloader = DataLoader(TrainDataset, batch_size=cfg[name]['batch_size'], shuffle=True,
+        #                                   num_workers=cfg['dataset_setting']['num_workers'],
+        #                                   collate_fn=voc_07_train.collate_fn, worker_init_fn=np.random.seed(0),
+        #                                   pin_memory=cfg['dataset_setting']['pin_memory'],
+        #                                   prefetch_factor=cfg['model']['prefetch'],
+        #                                   persistent_workers=cfg['model']['persistent'])
+        # elif cfg['model']['dataset'] == f'COCO':
+        #     train_dataloader = DataLoader(TrainDataset, batch_size=cfg[name]['batch_size'], shuffle=True,
+        #                                   num_workers=cfg['dataset_setting']['num_workers'],
+        #                                   collate_fn=COCODataset.collate_fn, worker_init_fn=np.random.seed(0),
+        #                                   pin_memory=cfg['dataset_setting']['pin_memory'],
+        #                                   prefetch_factor=cfg['model']['prefetch'],
+        #                                   persistent_workers=cfg['model']['persistent'])
         # test_dataloader = DataLoader(voc_07_test, batch_size=1, num_workers=cfg['dataset_setting']['num_workers'],
         #                              collate_fn=voc_07_train.collate_fn, pin_memory=cfg['dataset_setting']['pin_memory'],
         #                              persistent_workers=True)
@@ -127,8 +172,10 @@ if __name__ == '__main__':
 
     if local_rank == 0:
         writer = torch.utils.tensorboard.SummaryWriter(os.path.join('runs', save_name))
+        tqdm_disable = False
     else:
         writer = None
+        tqdm_disable = True
 
     # Train
     for epoch in tqdm(range(start_epoch, cfg[name]['Epoch']), desc='Epoch', disable=False if local_rank == 0 else True):
@@ -143,26 +190,31 @@ if __name__ == '__main__':
         model.train()
 
         pbar = enumerate(train_dataloader)
-        print(f'{"Gpu_mem":10s} {"cls":>10s} {"cnt":>10s} {"reg":>10s} {"total":>10s} ')
+        if local_rank == 0:
+            print(f'{"Gpu_mem":10s} {"cls":>10s} {"cnt":>10s} {"reg":>10s} {"total":>10s} ')
         pbar = tqdm(pbar, total=nb, desc='Batch', leave=True, disable=False if local_rank == 0 else True)
         for batch_idx, (imgs, targets, classes) in pbar:
             iters = len(train_dataloader) * epoch + batch_idx
             imgs, targets, classes = imgs.to(device), targets.to(device), classes.to(device)
 
-            if GLOBAL_STEPS < WARMUP_STEPS:
-                lr = float(GLOBAL_STEPS / WARMUP_STEPS * cfg[name]['optimizer']['lr'])
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
+            lr = lr_func(GLOBAL_STEPS)
+            for param in optimizer.param_groups:
+                param['lr'] = lr
 
-            if GLOBAL_STEPS == 20001:  # 20001
-                lr = cfg[name]['optimizer']['lr'] * 0.1
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
-
-            if GLOBAL_STEPS == 22001:  # 27001
-                lr = cfg[name]['optimizer']['lr'] * 0.01
-                for param in optimizer.param_groups:
-                    param['lr'] = lr
+            # if GLOBAL_STEPS < WARMUP_STEPS:
+            #     lr = float(GLOBAL_STEPS / WARMUP_STEPS * cfg[name]['optimizer']['lr'])
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 20001:  # 20001 # COCO 240000
+            #     lr = cfg[name]['optimizer']['lr'] * 0.1
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
+            #
+            # if GLOBAL_STEPS == 27001:  # 27001  # COCO 320000
+            #     lr = cfg[name]['optimizer']['lr'] * 0.01
+            #     for param in optimizer.param_groups:
+            #         param['lr'] = lr
 
             optimizer.zero_grad()
             with torch.cuda.amp.autocast(enabled=cfg['model']['amp']):
