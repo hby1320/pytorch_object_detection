@@ -52,7 +52,7 @@ HISFCOS:
 
 MNFCOS:
   CannelofBackbone: [2048, 1024, 512]
-  channel: 128
+  channel: 256
   Epoch: 50
   batch_size: 32
   optimizer:
@@ -61,9 +61,11 @@ MNFCOS:
     momentum : 0.9
     weight_decay : 0.0001 #0.0001
   criterion : giou
-  stride : [8, 16, 32, 64]
+  stride : [8, 16, 32, 64, 128]
   range :
     - [-1, 64]
     - [64, 128]
     - [128, 256]
-    - [256, 9999999]
+    - [256, 512]
+    - [512, 99999999]
+

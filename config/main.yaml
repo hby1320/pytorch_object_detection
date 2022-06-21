@@ -1,11 +1,12 @@
-dataset : voc #  VOC, COCO
-model : MNFCOS  # FCOS, HISFCOS MNFCOS
-voc : config/voc.yaml
-coco : config/coco.yaml
-amp : True
-ddp_enabled : False
-persistent_workers : True
-savename : Test25
+dataset : COCO #  VOC, COCO
+model : MNFCOS  # FCOS, HISFCOS,  MNFCOS
+VOC : config/voc.yaml
+COCO : config/coco.yaml
+amp : True  # True False
+ddp_enabled : True  #  True
+persistent_workers : False
+#savename : Test58
+savename : COCO_Str_test8
+#savename : VOC_test7
 prefetch_factor : 2
-
 

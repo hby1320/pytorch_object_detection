@@ -191,7 +191,10 @@ def evaluate_coco(generator, model, threshold=0.05):
 
 
 if __name__ == "__main__":
-    generator = COCOGenerator("../../data/coco/val2017", "../../data/coco/annotations/instances_val2017.json", [512, 512])
+    ddp_mode = True
+    generator = COCOGenerator("../../data/coco/val2017",
+                              "../../data/coco/annotations/instances_val2017.json",
+                              [512, 512])
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -201,7 +204,19 @@ if __name__ == "__main__":
     # model = FCOS(in_channel=[2048, 1024, 512], num_class=80, feature=256, efficientnet=False).to(device)
     # model = torch.nn.DataParallel(model)
     # model.load_state_dict(torch.load("./checkpoint/coco_37.2.pth", map_location=torch.device('cpu')))
-    model.load_state_dict(torch.load('./checkpoint/MNFCOS_COCO_Test7_15.pth'))
     # model.load_state_dict(torch.load("./checkpoint/coco_HISFCOS_e30b32_01_512_2_100.pth"))
+    check_point_path = f'./checkpoint/MNFCOS_COCO_Str_test8_512_24.pth'
+    if ddp_mode:
+        from collections import OrderedDict
+        state_dict = torch.load(check_point_path)
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        # load params
+        model.load_state_dict(new_state_dict)
+    else:
+        model.load_state_dict(torch.load(check_point_path))
+        # model.load_state_dict(torch.load('./checkpoint/MNFCOS_Icct_test2_50.pth'))
     model.eval()
     evaluate_coco(generator, model)

@@ -138,8 +138,8 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
                     # tp = torch.cat((tp, 1),dim=1)
                     # assigned_gt.append(gt_for_box)
                 else:
-                    # fp = torch.cat((fp, 0), dim = 1)
-                    # tp = torch.cat((tp, 1), dim = 1)
+                        # fp = torch.cat((fp, 0), dim = 1)
+                        # tp = torch.cat((tp, 1), dim = 1)
                     fp = np.append(fp, 1)
                     tp = np.append(tp, 0)
         # sort by score
@@ -150,7 +150,7 @@ def eval_ap_2d(gt_boxes, gt_labels, pred_boxes, pred_labels, pred_scores, iou_th
         # compute cumulative false positives and true positives
         fp = np.cumsum(fp)
         tp = np.cumsum(tp)
-        # fp = torch.cumsum(fp,dim=0)
+        # fp = torch.cumsum(fp,dim=0)-
         # tp = torch.cumsum(tp,dim=0)
         # compute recall and precision
         recall = tp / total_gts
@@ -224,21 +224,18 @@ def evaluate(model: nn.Module,
 
     pred_boxes, pred_classes, pred_scores = sort_by_score(pred_boxes, pred_classes, pred_scores)
     all_ap = eval_ap_2d(gt_boxes, gt_classes, pred_boxes, pred_classes, pred_scores, 0.5, 21)
-    classes_name = (
-        "__background__ ", "aeroplane", "bicycle", "bird", "boat",
-        "bottle", "bus", "car", "cat", "chair",
-        "cow", "diningtable", "dog", "horse", "motorbike",
-        "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",)
+    classes_name = ("__background__ ", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair",
+                    "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa",
+                    "train", "tvmonitor",)
 
-    print(f'all classes AP=====>\n')
+    print(f'all Classes AP\n')
     for key, value in all_ap.items():
-        # print(f'ap for {vialder.id2name[int(key)]} is {value}')
-        print(f'ap for {classes_name[int(key)]} is {value}')
+        print(f'{classes_name[int(key)]}: {value}')
     m_ap = 0.
     for class_id, class_mAP in all_ap.items():
         m_ap += float(class_mAP)
     m_ap /= (len(classes_name) - 1)
-    print(f'mAP=====>{m_ap:.3f}\n {fps=}')
+    print(f'mAP: {m_ap:.3f}\n fps: {fps}')
 
 
 if __name__ == '__main__':
@@ -254,8 +251,8 @@ if __name__ == '__main__':
     #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     # ])
     batch_size = 1
-    check_point_path = f'./checkpoint/FCOS_org_test_50.pth'
-    ddp_mode = False
+    check_point_path = f'./checkpoint/MNFCOS_VOC_test7_50.pth'
+    ddp_mode = True
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -272,7 +269,7 @@ if __name__ == '__main__':
 
     # model = FCOS([2048, 1024, 512], 20, 256).to(device)
     # model = HalfInvertedStageFCOS([512, 1024, 2048], 20, 256).to(device)
-    model = MNFCOS([2048, 1024, 512], 20, 128).to(device)
+    model = MNFCOS([2048, 1024, 512], 20, 256).to(device)
     if ddp_mode:
         from collections import OrderedDict
         state_dict = torch.load(check_point_path)
@@ -283,7 +280,7 @@ if __name__ == '__main__':
         # load params
         model.load_state_dict(new_state_dict)
     else:
-        model.load_state_dict(torch.load('./checkpoint/MNFCOS_Test15_50.pth'))
-        # model.load_state_dict(torch.load('./checkpoint/MNFCOS_featruepyamid_test1_49.pth'))
+        model.load_state_dict(torch.load('./checkpoint/MNFCOS_VOC_test6_50.pth'))
+        # model.load_state_dict(torch.load('./checkpoint/MNFCOS_Icct_test2_50.pth'))
 
     evaluate(model, valid_dataloder, False, False, device)

@@ -60,7 +60,7 @@ HISFCOS:
 MNFCOS:
   CannelofBackbone: [2048, 1024, 512]
   channel: 256
-  Epoch: 30
+  Epoch: 24
   batch_size: 8
   optimizer:
     name : SGD
