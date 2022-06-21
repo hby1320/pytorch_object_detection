@@ -262,6 +262,7 @@ def load_config(cfg: str = f'../config/main.yaml') -> dict:
     with open(main[dataset]) as f:
         config = load(f, Loader=FullLoader)
     config['model'] = {}
+    config['model']['dataset'] = dataset
     config['model']['name'] = main['model']
     config['model']['amp'] = main['amp']
     config['model']['ddp'] = main['ddp_enabled']
